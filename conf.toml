@@ -11,8 +11,8 @@ debug = true
 mgmt_port = 8126
 
 # Interval to flush to graphite in milliseconds
-flush_interval_ms = 1000
+flush_interval_ms = 2000
 
 # Dot-separated namespace for metrics. For instance, if namespace is gost.us-east, then a counter called
 # web.requests would be sent to graphite with the name "gost.us-east.counters.web.requests".
-namespace = "gost"
+namespace = "g2000

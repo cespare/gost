@@ -17,12 +17,15 @@ var (
 	configFile = flag.String("conf", "conf.toml", "TOML configuration file")
 	conf       *Conf
 
-	Namespace []string            // determined from conf.Namespace
-	Incoming  = make(chan Stat)   // incoming stats are passed to the aggregator
-	Outgoing  = make(chan []byte) // outgoing Graphite messages
+	namespace []string            // determined from conf.Namespace
+	incoming  = make(chan Stat)   // incoming stats are passed to the aggregator
+	outgoing  = make(chan []byte) // outgoing Graphite messages
 
-	// Stats state
-	Counters map[string]float64
+	stats = make(map[string]map[string]float64) // e.g. counters -> { foo.bar -> 2 }
+	statTypes     = []string{
+		"counters",
+		"counter_rates",
+	}
 )
 
 type StatType int
@@ -117,7 +120,7 @@ func handleMessages(messages []byte) {
 			// TODO: log bad message
 			return
 		}
-		Incoming <- stat
+		incoming <- stat
 	}
 }
 
@@ -143,9 +146,20 @@ func clientServer(addr *net.UDPAddr) error {
 	}
 }
 
-// Resets the state of all the various stat types.
+// clearStats resets the state of all the various stat types.
 func clearStats() {
-	Counters = make(map[string]float64)
+	for _, typ := range statTypes {
+		stats[typ] = make(map[string]float64)
+	}
+}
+
+// postProcessStats computes derived stats prior to flushing.
+func postProcessStats() {
+	// Compute the per-second rate for each counter
+	rateFactor := float64(conf.FlushIntervalMS) / 1000
+	for key, value := range stats["counters"] {
+		stats["counter_rates"][key] = value / rateFactor
+	}
 }
 
 // createGraphiteMessage buffers up a graphite message. We could write directly to the connection and avoid
@@ -154,11 +168,10 @@ func clearStats() {
 func createGraphiteMessage() []byte {
 	buf := &bytes.Buffer{}
 	timestamp := time.Now().Unix()
-	writeGraphiteStat := func(prefix, k string, v float64) {
-		fmt.Fprintf(buf, "%s %f %d\n", strings.Join(append(Namespace, prefix, k), "."), v, timestamp)
-	}
-	for key, value := range Counters {
-		writeGraphiteStat("counters", key, value)
+	for typ, s := range stats {
+		for key, value := range s {
+			fmt.Fprintf(buf, "%s %f %d\n", strings.Join(append(namespace, typ, key), "."), value, timestamp)
+		}
 	}
 	return buf.Bytes()
 }
@@ -169,16 +182,17 @@ func aggregate() {
 	ticker := time.NewTicker(time.Duration(conf.FlushIntervalMS) * time.Millisecond)
 	for {
 		select {
-		case stat := <-Incoming:
+		case stat := <-incoming:
+			key := strings.Join(stat.Name, ".")
 			switch stat.Type {
 			case StatCounter:
-				key := strings.Join(stat.Name, ".")
-				Counters[key] += stat.Value
+				stats["counters"][key] += stat.Value
 			}
 		case <-ticker.C:
+			postProcessStats()
 			msg := createGraphiteMessage()
 			if len(msg) > 0 {
-				Outgoing <- msg
+				outgoing <- msg
 			}
 			clearStats()
 		}
@@ -187,7 +201,7 @@ func aggregate() {
 
 // flush pushes outgoing messages to graphite.
 func flush() {
-	for msg := range Outgoing {
+	for msg := range outgoing {
 		conn, err := net.Dial("tcp", conf.GraphiteAddr)
 		if err != nil {
 			log.Printf("Error: cannot connect to graphite at %s: %s\n", conf.GraphiteAddr, err)

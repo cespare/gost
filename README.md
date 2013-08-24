@@ -4,7 +4,6 @@ Gost is a Go implementation of the [StatsD](https://github.com/etsy/statsd/) dae
 
 # To Do
 
-* Calculate per second rates for counters
 * Implement sets
 * Implement gauges
 * Implement timers
@@ -22,3 +21,4 @@ Gost is a Go implementation of the [StatsD](https://github.com/etsy/statsd/) dae
 * Hostname parsing for namespaces
 * Right now we clear all stats by default, and don't send zero values (equivalent to statsd's
   config.deleteCounters, etc). Do we ever want to send zero values?
+* TCP management interface

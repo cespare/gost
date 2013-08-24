@@ -42,5 +42,5 @@ func parseConf() {
 	}
 
 	// TODO: parse things like %H -> hostname and sanitize.
-	Namespace = strings.Split(conf.Namespace, ".")
+	namespace = strings.Split(conf.Namespace, ".")
 }
