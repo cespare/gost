@@ -17,7 +17,6 @@ Gost is a Go implementation of the [StatsD](https://github.com/etsy/statsd/) dae
     * processing time (timer)
     * flush time/length
 * System stats (CPU load? HD usage? ...)
-* Key sanitization
 * Hostname parsing for namespaces
 * Right now we clear all stats by default, and don't send zero values (equivalent to statsd's
   config.deleteCounters, etc). Do we ever want to send zero values?

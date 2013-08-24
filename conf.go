@@ -34,13 +34,17 @@ func parseConf() {
 		log.Fatal(err)
 	}
 	if _, err = toml.DecodeReader(f, conf); err != nil {
-		log.Fatal(err)
+		log.Fatalf("Error decoding %s: %s\n", *configFile, err)
 	}
 	empty := emptyFields(conf)
 	if len(empty) > 0 {
 		log.Fatalf("Missing fields in %s: %v\n", *configFile, empty)
 	}
 
-	// TODO: parse things like %H -> hostname and sanitize.
-	namespace = strings.Split(conf.Namespace, ".")
+	// TODO: parse things like %H -> hostname.
+	parts := strings.Split(conf.Namespace, ".")
+	namespace = make([]string, len(parts))
+	for i, part := range parts {
+		namespace[i] = sanitizeKey(part)
+	}
 }

@@ -15,4 +15,4 @@ flush_interval_ms = 2000
 
 # Dot-separated namespace for metrics. For instance, if namespace is gost.us-east, then a counter called
 # web.requests would be sent to graphite with the name "gost.us-east.counters.web.requests".
-namespace = "g2000
+namespace = "gost"
