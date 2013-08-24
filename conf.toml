@@ -1,0 +1,18 @@
+# Graphite backend address
+graphite_addr = "localhost:2003"
+
+# Port to listen for statsd messages from clients over UDP
+port = 8125
+
+# Print some verbose debugging information
+debug = true
+
+# Port to listen on for a TCP management console (use, for example, via telnet)
+mgmt_port = 8126
+
+# Interval to flush to graphite in milliseconds
+flush_interval_ms = 1000
+
+# Dot-separated namespace for metrics. For instance, if namespace is gost.us-east, then a counter called
+# web.requests would be sent to graphite with the name "gost.us-east.counters.web.requests".
+namespace = "gost"
