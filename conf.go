@@ -4,27 +4,10 @@ import (
 	"flag"
 	"log"
 	"os"
-	"reflect"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 )
-
-// emptyFields takes a pointer to a struct type and returns a slice of json tags of its empty fields.
-// NOTE: This function panics if s is not a pointer to a struct type.
-func emptyFields(s interface{}) []string {
-	empty := []string{}
-	v := reflect.ValueOf(s).Elem()
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		name := v.Type().Field(i).Tag.Get("toml")
-		zero := reflect.Zero(field.Type())
-		if reflect.DeepEqual(field.Interface(), zero.Interface()) {
-			empty = append(empty, name)
-		}
-	}
-	return empty
-}
 
 // filterNamespace replaces templated fields in the user-provided namespace and sanitizes it.
 func filterNamespace(ns string) string {
@@ -43,12 +26,53 @@ func parseConf() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if _, err = toml.DecodeReader(f, conf); err != nil {
+	meta, err := toml.DecodeReader(f, conf)
+	if err != nil {
 		log.Fatalf("Error decoding %s: %s\n", *configFile, err)
 	}
-	empty := emptyFields(conf)
-	if len(empty) > 0 {
-		log.Fatalf("Missing fields in %s: %v\n", *configFile, empty)
+
+	for _, field := range []string{"graphite_addr", "port", "flush_interval_ms", "namespace"} {
+		if !meta.IsDefined(field) {
+			log.Fatal(field, "is required")
+		}
+	}
+	if conf.FlushIntervalMS <= 0 {
+		log.Fatal("flush_interval_ms must be positive")
+	}
+
+	osStats := conf.OsStats
+	if osStats != nil {
+		if meta.IsDefined("os_stats", "check_interval_ms") {
+			if osStats.CheckIntervalMS <= 0 {
+				log.Fatal("check_interval_ms must be positive")
+			}
+		} else {
+			osStats.CheckIntervalMS = conf.FlushIntervalMS
+		}
+		for _, field := range [][]int{osStats.LoadAvg, osStats.LoadAvgPerCPU} {
+			for _, t := range field {
+				switch t {
+				case 1, 5, 15:
+				default:
+					log.Fatalf("bad load average time window: %d\n", t)
+				}
+			}
+		}
+		for name, options := range osStats.DiskUsage {
+			if options == nil {
+				log.Fatalf("bad disk usage section %s.\n", name)
+			}
+			for _, field := range []string{"path", "values"} {
+				if !meta.IsDefined("os_stats", "disk_usage", name, field) {
+					log.Fatalf("missing %s in disk usage section %s.\n", field, name)
+				}
+			}
+			switch options.Values {
+			case "fraction", "absolute":
+			default:
+				log.Fatalf("bad values given: %s (must be 'fraction' or 'absolute')", options.Values)
+			}
+		}
 	}
 
 	parts := strings.Split(conf.Namespace, ".")

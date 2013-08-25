@@ -53,13 +53,25 @@ type Stat struct {
 	SampleRate float64
 }
 
+type DiskUsageConf struct {
+	Path   string `toml:"path"`
+	Values string `toml:"values"`
+}
+
+type OsStatsConf struct {
+	CheckIntervalMS int                       `toml:"check_interval_ms"`
+	LoadAvg         []int                     `toml:"load_avg"`
+	LoadAvgPerCPU   []int                     `toml:"load_avg_per_cpu"`
+	DiskUsage       map[string]*DiskUsageConf `toml:"disk_usage"`
+}
+
 type Conf struct {
-	GraphiteAddr    string `toml:"graphite_addr"`
-	Port            int    `toml:"port"`
-	Debug           bool   `toml:"debug"`
-	MgmtPort        int    `toml:"mgmt_port"`
-	FlushIntervalMS int    `toml:"flush_interval_ms"`
-	Namespace       string `toml:"namespace"`
+	GraphiteAddr    string       `toml:"graphite_addr"`
+	Port            int          `toml:"port"`
+	Debug           bool         `toml:"debug"`
+	FlushIntervalMS int          `toml:"flush_interval_ms"`
+	Namespace       string       `toml:"namespace"`
+	OsStats         *OsStatsConf `toml:"os_stats"`
 }
 
 func handleMessages(messages []byte) {
@@ -229,6 +241,10 @@ func main() {
 	clearStats()
 	go flush()
 	go aggregate()
+	if conf.OsStats != nil {
+		fmt.Println("checking os stats")
+		go checkOsStats()
+	}
 
 	udpAddr := fmt.Sprintf("localhost:%d", conf.Port)
 	udp, err := net.ResolveUDPAddr("udp", udpAddr)
