@@ -26,6 +26,16 @@ func emptyFields(s interface{}) []string {
 	return empty
 }
 
+// filterNamespace replaces templated fields in the user-provided namespace and sanitizes it.
+func filterNamespace(ns string) string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Fatal(err)
+	}
+	ns = strings.NewReplacer("%H", hostname).Replace(ns)
+	return sanitizeKey(ns)
+}
+
 func parseConf() {
 	flag.Parse()
 	conf = &Conf{}
@@ -41,10 +51,9 @@ func parseConf() {
 		log.Fatalf("Missing fields in %s: %v\n", *configFile, empty)
 	}
 
-	// TODO: parse things like %H -> hostname.
 	parts := strings.Split(conf.Namespace, ".")
 	namespace = make([]string, len(parts))
 	for i, part := range parts {
-		namespace[i] = sanitizeKey(part)
+		namespace[i] = filterNamespace(part)
 	}
 }

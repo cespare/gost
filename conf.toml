@@ -13,6 +13,7 @@ mgmt_port = 8126
 # Interval to flush to graphite in milliseconds
 flush_interval_ms = 2000
 
-# Dot-separated namespace for metrics. For instance, if namespace is gost.us-east, then a counter called
-# web.requests would be sent to graphite with the name "gost.us-east.counters.web.requests".
-namespace = "gost"
+# Dot-separated namespace for metrics. %H will be replaced with the machine's hostname. For instance, if
+# namespace is example.%H and the hostname is web-25, then a counter called web.requests would be sent to
+# graphite with the name "example.web-25.counters.web.requests".
+namespace = "example.%H"
