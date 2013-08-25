@@ -35,8 +35,8 @@ func metaCount(name string) {
 	s := &Stat{
 		Type:       StatCounter,
 		Name:       []string{"gost", name},
-		Value:      float64(1),
-		SampleRate: float64(1),
+		Value:      1.0,
+		SampleRate: 1.0,
 	}
 	incoming <- s
 }
@@ -85,7 +85,7 @@ func parseStatsdMessage(msg []byte) (stat *Stat, ok bool) {
 		return stat, true
 	}
 
-	sampleRate := float64(1)
+	sampleRate := 1.0
 	if len(fields) == 3 {
 		sampleRateBytes := fields[2]
 		if len(sampleRateBytes) < 2 || sampleRateBytes[0] != '@' {

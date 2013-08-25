@@ -40,7 +40,7 @@ func osGauge(name []string, value float64) {
 		Type:       StatGauge,
 		Name:       append([]string{"gost", "os_stats"}, name...),
 		Value:      value,
-		SampleRate: float64(1),
+		SampleRate: 1.0,
 	}
 }
 

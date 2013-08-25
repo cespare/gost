@@ -140,14 +140,14 @@ func postProcessStats() {
 		// count_rate is the rate (per second) at which timings were recorded
 		timerStats["count_rate"] = count / rateFactor
 		// sum is the total sum of all timings. You can use count and sum to compute statistics across buckets.
-		sum := float64(0)
+		sum := 0.0
 		for _, t := range values {
 			sum += t
 		}
 		timerStats["sum"] = sum
 		mean := sum / count
 		timerStats["mean"] = mean
-		sumSquares := float64(0)
+		sumSquares := 0.0
 		for _, v := range values {
 			d := v - mean
 			sumSquares += d * d

@@ -20,4 +20,5 @@ TODO
 * Right now we clear all stats by default, and don't send zero values (equivalent to statsd's
   config.deleteCounters, etc). Do we ever want to send zero values?
 * TCP management interface. Is this useful?
-* Add memory usage to os stats
+* Add memory usage to os stats. (On linux this is quite tricky -- what do you report? VSZ? RSS? I really want
+  to use PSS but I'm not sure how to get it for the whole system.)

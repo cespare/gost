@@ -20,7 +20,8 @@ namespace = "example.%H"
 meta_stats = true
 
 # The os_stats section specifies stats that gost will determine from the host system.
-# NOTE: These stats are linux-specific. They pull information from the /proc filesystem.
+# NOTE: Everything below here is linux-specific. os_stats pulls information from the /proc filesystem and
+# Linux syscalls.
 # NOTE: Delete/comment out the whole os_stats section if you're not using it.
 [os_stats]
 
@@ -40,5 +41,5 @@ load_avg_per_cpu = [1, 5, 15]
 # amount of space used (in bytes). If "fraction" is used instead, it will report the fraction of the total
 # used (0.0 - 1.0).
 [os_stats.disk_usage.data_volume]
-path = "/mnt"
+path = "/mnt/data"
 values = "fraction"
