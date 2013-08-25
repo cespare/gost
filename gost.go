@@ -5,25 +5,35 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net"
+	"sort"
 	"strings"
 	"time"
 )
 
-const udpBufSize = 10e3 // 10kB buffer, so we can handle huge messages
+const (
+	incomingQueueSize = 100
+	udpBufSize        = 10e3 // 10kB buffer, so we can handle huge messages
+)
 
 var (
 	configFile = flag.String("conf", "conf.toml", "TOML configuration file")
 	conf       *Conf
 
-	namespace []string            // determined from conf.Namespace
-	incoming  = make(chan Stat)   // incoming stats are passed to the aggregator
-	outgoing  = make(chan []byte) // outgoing Graphite messages
+	namespace []string                              // determined from conf.Namespace
+	incoming  = make(chan *Stat, incomingQueueSize) // incoming stats are passed to the aggregator
+	outgoing  = make(chan []byte)                   // outgoing Graphite messages
 
-	stats = make(map[string]map[string]float64) // e.g. counters -> { foo.bar -> 2 }
-	statTypes     = []string{
-		"counters",
-		"counter_rates",
+	stats = NewBufferedCounts() // e.g. counters -> { foo.bar -> 2 }
+	// sets and timers require additional structures for intermediate computations.
+	setValues     map[string]map[float64]struct{}
+	timerValues   map[string][]float64
+	tagToStatType = map[string]StatType{
+		"c":  StatCounter,
+		"g":  StatGauge,
+		"ms": StatTimer,
+		"s":  StatSet,
 	}
 )
 
@@ -37,9 +47,10 @@ const (
 )
 
 type Stat struct {
-	Type  StatType
-	Name  []string
-	Value float64
+	Type       StatType
+	Name       []string
+	Value      float64
+	SampleRate float64
 }
 
 type Conf struct {
@@ -55,7 +66,8 @@ func handleMessages(messages []byte) {
 	for _, msg := range bytes.Split(messages, []byte{'\n'}) {
 		stat, ok := parseStatsdMessage(msg)
 		if !ok {
-			// TODO: log bad message
+			log.Println("bad message:", string(msg))
+			metaCount("bad_messages_seen")
 			return
 		}
 		incoming <- stat
@@ -75,6 +87,7 @@ func clientServer(addr *net.UDPAddr) error {
 		if err != nil {
 			return err
 		}
+		metaCount("packets_received")
 		if n >= udpBufSize {
 			return fmt.Errorf("UDP message too large.")
 		}
@@ -84,34 +97,79 @@ func clientServer(addr *net.UDPAddr) error {
 	}
 }
 
-// clearStats resets the state of all the various stat types.
+// clearStats resets the state of all the stat types.
 func clearStats() {
-	for _, typ := range statTypes {
-		stats[typ] = make(map[string]float64)
-	}
+	stats.Clear()
+	setValues = make(map[string]map[float64]struct{})
+	timerValues = make(map[string][]float64)
 }
 
 // postProcessStats computes derived stats prior to flushing.
 func postProcessStats() {
 	// Compute the per-second rate for each counter
 	rateFactor := float64(conf.FlushIntervalMS) / 1000
-	for key, value := range stats["counters"] {
-		stats["counter_rates"][key] = value / rateFactor
+	for key, value := range stats.Get("counters") {
+		stats.Set("counter_rates", key, value/rateFactor)
+	}
+	// Compute the size of each set
+	for key, value := range setValues {
+		stats.Set("sets", key, float64(len(value)))
+	}
+
+	// Process all the various stats for each timer
+	for key, values := range timerValues {
+		if len(values) == 0 {
+			continue
+		}
+		timerStats := make(map[string]float64)
+		count := float64(len(values))
+		// count is the number of timer values recorded
+		timerStats["count"] = count
+		// count_rate is the rate (per second) at which timings were recorded
+		timerStats["count_rate"] = count / rateFactor
+		// sum is the total sum of all timings. You can use count and sum to compute statistics across buckets.
+		sum := float64(0)
+		for _, t := range values {
+			sum += t
+		}
+		timerStats["sum"] = sum
+		mean := sum / count
+		timerStats["mean"] = mean
+		sumSquares := float64(0)
+		for _, v := range values {
+			d := v - mean
+			sumSquares += d * d
+		}
+		timerStats["stdev"] = math.Sqrt(sumSquares / count)
+		sort.Float64s(values)
+		timerStats["min"] = values[0]
+		timerStats["max"] = values[len(values)-1]
+		if len(values)%2 == 0 {
+			timerStats["median"] = float64(values[len(values)/2-1]+values[len(values)/2]) / 2
+		} else {
+			timerStats["median"] = float64(values[len(values)/2])
+		}
+		// Now write out all these stats as namespaced keys
+		for statName, value := range timerStats {
+			k := "timers." + statName
+			stats.Set(k, key, value)
+		}
 	}
 }
 
 // createGraphiteMessage buffers up a graphite message. We could write directly to the connection and avoid
 // the extra buffering but this allows us to use separate goroutines to write to graphite (potentially slow)
 // and aggregate (happening all the time).
-func createGraphiteMessage() []byte {
+func createGraphiteMessage() (n int, msg []byte) {
 	buf := &bytes.Buffer{}
 	timestamp := time.Now().Unix()
 	for typ, s := range stats {
 		for key, value := range s {
+			n++
 			fmt.Fprintf(buf, "%s %f %d\n", strings.Join(append(namespace, typ, key), "."), value, timestamp)
 		}
 	}
-	return buf.Bytes()
+	return n, buf.Bytes()
 }
 
 // aggregate reads the incoming messages and aggregates them. It sends them to be flushed every flush
@@ -124,13 +182,27 @@ func aggregate() {
 			key := strings.Join(stat.Name, ".")
 			switch stat.Type {
 			case StatCounter:
-				stats["counters"][key] += stat.Value
+				stats.Inc("counters", key, stat.Value/stat.SampleRate)
+			case StatSet:
+				set, ok := setValues[key]
+				if ok {
+					set[stat.Value] = struct{}{}
+				} else {
+					setValues[key] = map[float64]struct{}{stat.Value: struct{}{}}
+				}
+			case StatGauge:
+				stats.Set("gauges", key, stat.Value)
+			case StatTimer:
+				timerValues[key] = append(timerValues[key], stat.Value)
 			}
 		case <-ticker.C:
 			postProcessStats()
-			msg := createGraphiteMessage()
-			if len(msg) > 0 {
+			n, msg := createGraphiteMessage()
+			if n > 0 {
+				dbg.Printf("Flushing %d stats.\n", n)
 				outgoing <- msg
+			} else {
+				dbg.Println("No stats to flush.")
 			}
 			clearStats()
 		}
