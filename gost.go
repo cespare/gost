@@ -135,10 +135,8 @@ func postProcessStats() {
 		}
 		timerStats := make(map[string]float64)
 		count := float64(len(values))
-		// count is the number of timer values recorded
-		timerStats["count"] = count
-		// count_rate is the rate (per second) at which timings were recorded
-		timerStats["count_rate"] = count / rateFactor
+		// count_rate is the rate (per second) at which timings were recorded (scaled for the sampling rate).
+		timerStats["count_rate"] = stats.Get("timers.count")[key] / rateFactor
 		// sum is the total sum of all timings. You can use count and sum to compute statistics across buckets.
 		sum := 0.0
 		for _, t := range values {
@@ -205,6 +203,7 @@ func aggregate() {
 			case StatGauge:
 				stats.Set("gauges", key, stat.Value)
 			case StatTimer:
+				stats.Inc("timers.count", key, 1.0/stat.SampleRate)
 				timerValues[key] = append(timerValues[key], stat.Value)
 			}
 		case <-ticker.C:
