@@ -11,7 +11,8 @@ import (
 var (
 	sanitizeSpaces     = regexp.MustCompile(`\s+`)
 	sanitizeSlashes    = strings.NewReplacer("/", "-")
-	sanitizeDisallowed = regexp.MustCompile(`[^a-zA-Z_\-0-9\.]`)
+	// Printable ascii characters that aren't allowed
+	sanitizeDisallowed = ` <>/`
 	dbg                _dbg
 )
 
@@ -41,10 +42,17 @@ func metaCount(name string) {
 	incoming <- s
 }
 
+func removeDisallowedKeyRunes(r rune) rune {
+	if strings.IndexRune(sanitizeDisallowed, r) < 0 {
+		return r
+	}
+	return -1
+}
+
 func sanitizeKey(key string) string {
 	key = sanitizeSpaces.ReplaceAllLiteralString(key, "_")
 	key = sanitizeSlashes.Replace(key)
-	return sanitizeDisallowed.ReplaceAllLiteralString(key, "")
+	return strings.Map(removeDisallowedKeyRunes, key)
 }
 
 func parseStatsdMessage(msg []byte) (stat *Stat, ok bool) {

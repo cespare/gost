@@ -24,11 +24,9 @@ For completeness, here is a summary of the supported messages. All messages are 
 port configured by the `port` setting in the config file. Typically each message is a UDP packet, but multiple
 messages can be sent in a single packet by separating them with `\n` characters.
 
-There are two data types involved: **keys** and **values**. **keys** are strings matching this regex:
-
-    /^[a-zA-Z0-9\-_\.]+$/
-
-Values are human-printed floats:
+There are two data types involved: **keys** and **values**. **keys** are strings formed from any printable
+ascii characters other than space, `<`, `>`, and `/`. (If you send space or `/`, gost will automatically
+change these to `.` and `-`, respectively.) **values** are human-printed floats:
 
     /^[+\-]?\d+(\.\d+)?$/
 
@@ -106,6 +104,8 @@ info about the host. See [the configuration file](conf.toml) for how to set this
 
 ## Differences with StatsD
 
+* Gost keys are allowed to be any printable ascii character expect space, `<`, `>`, and `/`. Graphite handles
+  this set of keys just fine. (Statsd only allows keys matching `/^[a-zA-Z0-9\-_\.]+$/`.)
 * Gauges cannot be deltas; they must be absolute values.
 * No stats will be sent if there is no data for a flush interval. (In StatsD, this is like setting
   `deleteCounters`, `deleteTimers`, etc.)

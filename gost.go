@@ -223,6 +223,7 @@ func aggregate() {
 // flush pushes outgoing messages to graphite.
 func flush() {
 	for msg := range outgoing {
+		dbg.Printf("Sending message:\n%s\n", msg)
 		conn, err := net.Dial("tcp", conf.GraphiteAddr)
 		if err != nil {
 			log.Printf("Error: cannot connect to graphite at %s: %s\n", conf.GraphiteAddr, err)
