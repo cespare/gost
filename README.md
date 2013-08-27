@@ -104,7 +104,7 @@ info about the host. See [the configuration file](conf.toml) for how to set this
 
 ## Differences with StatsD
 
-* Gost keys are allowed to be any printable ascii character expect space, `<`, `>`, and `/`. Graphite handles
+* Gost keys are allowed to be any printable ascii character except space, `<`, `>`, and `/`. Graphite handles
   this set of keys just fine. (Statsd only allows keys matching `/^[a-zA-Z0-9\-_\.]+$/`.)
 * Gauges cannot be deltas; they must be absolute values.
 * No stats will be sent if there is no data for a flush interval. (In StatsD, this is like setting
