@@ -242,7 +242,6 @@ func main() {
 	go flush()
 	go aggregate()
 	if conf.OsStats != nil {
-		fmt.Println("checking os stats")
 		go checkOsStats()
 	}
 
