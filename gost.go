@@ -35,6 +35,10 @@ var (
 		"ms": StatTimer,
 		"s":  StatSet,
 	}
+
+	// flushTicker and now are functions that the tests can stub out.
+	flushTicker func() <-chan time.Time
+	now         func() time.Time = time.Now
 )
 
 type StatType int
@@ -86,12 +90,7 @@ func handleMessages(messages []byte) {
 	}
 }
 
-func clientServer(addr *net.UDPAddr) error {
-	c, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return err
-	}
-
+func clientServer(c *net.UDPConn) error {
 	buf := make([]byte, udpBufSize)
 	for {
 		n, _, err := c.ReadFromUDP(buf)
@@ -172,7 +171,7 @@ func postProcessStats() {
 // and aggregate (happening all the time).
 func createGraphiteMessage() (n int, msg []byte) {
 	buf := &bytes.Buffer{}
-	timestamp := time.Now().Unix()
+	timestamp := now().Unix()
 	for typ, s := range stats {
 		for key, value := range s {
 			n++
@@ -185,7 +184,7 @@ func createGraphiteMessage() (n int, msg []byte) {
 // aggregate reads the incoming messages and aggregates them. It sends them to be flushed every flush
 // interval.
 func aggregate() {
-	ticker := time.NewTicker(time.Duration(conf.FlushIntervalMS) * time.Millisecond)
+	ticker := flushTicker()
 	for {
 		select {
 		case stat := <-incoming:
@@ -206,7 +205,7 @@ func aggregate() {
 				stats.Inc("timers.count", key, 1.0/stat.SampleRate)
 				timerValues[key] = append(timerValues[key], stat.Value)
 			}
-		case <-ticker.C:
+		case <-ticker:
 			postProcessStats()
 			n, msg := createGraphiteMessage()
 			if n > 0 {
@@ -237,7 +236,12 @@ func flush() {
 }
 
 func main() {
+	flag.Parse()
 	parseConf()
+	flushTicker = func() <-chan time.Time {
+		return time.NewTicker(time.Duration(conf.FlushIntervalMS) * time.Millisecond).C
+	}
+
 	clearStats()
 	go flush()
 	go aggregate()
@@ -251,5 +255,9 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("Listening for UDP client requests on", udp)
-	log.Fatal(clientServer(udp))
+	conn, err := net.ListenUDP("udp", udp)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Fatal(clientServer(conn))
 }

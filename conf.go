@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"log"
 	"os"
 	"strings"
@@ -20,7 +19,6 @@ func filterNamespace(ns string) string {
 }
 
 func parseConf() {
-	flag.Parse()
 	conf = &Conf{}
 	f, err := os.Open(*configFile)
 	if err != nil {
