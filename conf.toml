@@ -1,11 +1,14 @@
 # Graphite backend address
 graphite_addr = "localhost:2003"
 
-# Port to listen for statsd messages from clients over UDP
+# Port to listen (on localhost) for statsd messages from clients over UDP
 port = 8125
 
+# Port to listen (on localhost) for people to connect (using, e.g., telnet) for debugging output.
+debug_port = 8126
+
 # Print some verbose debugging information
-debug = true
+debug_logging = true
 
 # This option controls whether gost clears out stats after it flushes. If true, gost won't remember what stats
 # it has seen; if false, it will set counts to 0 (and leave gauges at the previous value) but keep sending the

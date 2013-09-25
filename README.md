@@ -92,7 +92,7 @@ Gost sends back some stats about itself to graphite as well. This includes:
 * `gost.packets_received`: a counter for the number of packets gost has read
 
 There are some other counters for various error conditions. Most of these also show up in the stdout of gost
-if you use the `debug = true` option in the configuration.
+if you use the `debug_logging = true` option in the configuration.
 
 ### OS Stats
 
@@ -101,6 +101,17 @@ info about the host. See [the configuration file](conf.toml) for how to set this
 
 * Load averages for 1, 5, and 15 minutes; either as-is or divided by the number of CPUs for convenience
 * Disk usage for any given filesystem path
+
+### Debug interface
+
+The `debug_port` setting controls the port of a local server that gost starts up for debugging. Gost will
+print its (UDP) input and (Graphite) output via TCP to any client that connects to this port. So if you're using
+`debug_port = 8126` as in the example config, then you can connect like this:
+
+    telnet localhost 8126
+
+and you will see gost's input and output. This is very handy for debugging, instead of changing the
+`debug_logging` setting.
 
 ## Differences with StatsD
 

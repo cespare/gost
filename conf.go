@@ -29,7 +29,7 @@ func parseConf() {
 		log.Fatalf("Error decoding %s: %s\n", *configFile, err)
 	}
 
-	for _, field := range []string{"graphite_addr", "port", "flush_interval_ms", "namespace"} {
+	for _, field := range []string{"graphite_addr", "port", "debug_port", "flush_interval_ms", "namespace"} {
 		if !meta.IsDefined(field) {
 			log.Fatal(field, "is required")
 		}

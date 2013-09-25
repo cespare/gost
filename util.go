@@ -19,13 +19,13 @@ var (
 type _dbg struct{}
 
 func (d _dbg) Printf(format string, args ...interface{}) {
-	if conf.Debug {
+	if conf.DebugLogging {
 		log.Printf("DEBUG: "+format, args...)
 	}
 }
 
 func (d _dbg) Println(args ...interface{}) {
-	if conf.Debug {
+	if conf.DebugLogging {
 		args = append([]interface{}{"DEBUG:"}, args...)
 		log.Println(args...)
 	}

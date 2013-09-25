@@ -49,6 +49,12 @@ func (s *GostSuite) SetUpTest(c *C) {
 		FlushIntervalMS:          2000, // Fake
 	}
 	namespace = []string{"com", "example"}
+
+	// Bind to any port
+	if err := debugServer.Start(0); err != nil {
+		c.Fatal(err)
+	}
+
 	udp, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
 		c.Fatal(err)
@@ -202,7 +208,7 @@ func checkAllApprox(c *C, tests []testCase) {
 		parsed := msg.Parsed[key]
 		if parsed == nil {
 			fmt.Println(string(msg.Raw))
-			c.Fatal("No graphite key found:", key)
+			c.Fatal("No graphite key found: ", key)
 		}
 		c.Check(parsed.Value, approx, test.Value)
 	}

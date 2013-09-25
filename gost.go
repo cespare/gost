@@ -36,6 +36,8 @@ var (
 		"s":  StatSet,
 	}
 
+	debugServer = newDServer()
+
 	// flushTicker and now are functions that the tests can stub out.
 	flushTicker func() <-chan time.Time
 	now         func() time.Time = time.Now
@@ -72,7 +74,8 @@ type OsStatsConf struct {
 type Conf struct {
 	GraphiteAddr             string       `toml:"graphite_addr"`
 	Port                     int          `toml:"port"`
-	Debug                    bool         `toml:"debug"`
+	DebugPort                int          `toml:"debug_port"`
+	DebugLogging             bool         `toml:"debug_logging"`
 	ClearStatsBetweenFlushes bool         `toml:"clear_stats_between_flushes"`
 	FlushIntervalMS          int          `toml:"flush_interval_ms"`
 	Namespace                string       `toml:"namespace"`
@@ -81,6 +84,10 @@ type Conf struct {
 
 func handleMessages(messages []byte) {
 	for _, msg := range bytes.Split(messages, []byte{'\n'}) {
+		if len(msg) == 0 {
+			continue
+		}
+		debugServer.In <- msg
 		stat, ok := parseStatsdMessage(msg)
 		if !ok {
 			log.Println("bad message:", string(msg))
@@ -243,6 +250,7 @@ func aggregate() {
 func flush() {
 	for msg := range outgoing {
 		dbg.Printf("Sending message:\n%s\n", msg)
+		debugServer.Out <- msg
 		conn, err := net.Dial("tcp", conf.GraphiteAddr)
 		if err != nil {
 			log.Printf("Error: cannot connect to graphite at %s: %s\n", conf.GraphiteAddr, err)
@@ -252,6 +260,77 @@ func flush() {
 			log.Println("Warning: could not write Graphite message.")
 		}
 		conn.Close()
+	}
+}
+
+// dServer listens on a local tcp port and prints out debugging info to clients that connect.
+type dServer struct {
+	Clients []net.Conn
+	Closed chan net.Conn
+	In      chan []byte
+	Out     chan []byte
+}
+
+func newDServer() *dServer {
+	return &dServer{
+		Closed: make(chan net.Conn, 1),
+		In:  make(chan []byte),
+		Out: make(chan []byte),
+	}
+}
+
+func (s *dServer) Start(port int) error {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	log.Println("Listening for debug TCP clients on", addr)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	newConns := make(chan net.Conn)
+	go func() {
+		for {
+			c, err := listener.Accept()
+			if err != nil {
+				continue
+			}
+			newConns <- c
+		}
+	}()
+	go func() {
+		for {
+			select {
+			case c := <-newConns:
+				s.Clients = append(s.Clients, c)
+			case client := <-s.Closed:
+				for i, c := range s.Clients {
+					if c == client {
+						s.Clients = append(s.Clients[:i], s.Clients[i+1:]...)
+						client.Close()
+						break
+					}
+				}
+			case msg := <-s.In:
+				s.PrintDebugLine("[in] ", msg)
+			case msg := <-s.Out:
+				s.PrintDebugLine("[out] ", msg)
+			}
+		}
+	}()
+	return nil
+}
+
+func (s *dServer) PrintDebugLine(tag string, message []byte) {
+	for _, client := range s.Clients {
+		for _, line := range bytes.Split(message, []byte{'\n'}) {
+			if len(line) == 0 {
+				continue
+			}
+			msg := append([]byte(tag), line...)
+			msg = append(msg, '\n')
+			if _, err := client.Write(msg); err != nil {
+				s.Closed <- client
+			}
+		}
 	}
 }
 
@@ -267,6 +346,10 @@ func main() {
 	go aggregate()
 	if conf.OsStats != nil {
 		go checkOsStats()
+	}
+
+	if err := debugServer.Start(conf.DebugPort); err != nil {
+		log.Fatal(err)
 	}
 
 	udpAddr := fmt.Sprintf("localhost:%d", conf.Port)
