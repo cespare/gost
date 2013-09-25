@@ -195,24 +195,30 @@ type testCase struct {
 func checkAllApprox(c *C, tests []testCase) {
 	msg := rec.waitForMessage()
 	for _, test := range tests {
-		c.Check(msg.Parsed["com.example."+test.Key].Value, approx, test.Value)
+		key := "com.example." + test.Key
+		parsed := msg.Parsed[key]
+		if parsed == nil {
+			fmt.Println(string(msg.Raw))
+			c.Fatal("No graphite key found:", key)
+		}
+		c.Check(parsed.Value, approx, test.Value)
 	}
 }
 
 // ----------- Tests ----------------
 
 func (s *GostSuite) TestCounters(c *C) {
-	sendGostMessages(c, "foobar:3|c", "foobar:5|c", "baz:2|c")
+	sendGostMessages(c, "foobar:3|c", "foobar:5|c", "baz:2|c|@0.1", "baz:4|c|@0.1")
 	checkAllApprox(c, []testCase{
 		{"foobar.count", 8.0},
 		{"foobar.rate", 4.0},
-		{"baz.count", 2.0},
-		{"baz.rate", 1.0},
+		{"baz.count", 60.0},
+		{"baz.rate", 30.0},
 	})
 }
 
 func (s *GostSuite) TestTimers(c *C) {
-	sendGostMessages(c, "foobar:100|ms", "foobar:100|ms", "foobar:400|ms", "baz:500|ms")
+	sendGostMessages(c, "foobar:100|ms", "foobar:100|ms", "foobar:400|ms", "baz:500|ms|@0.2")
 	checkAllApprox(c, []testCase{
 		{"foobar.timer.count", 3.0},
 		{"foobar.timer.rate", 1.5},
@@ -222,8 +228,8 @@ func (s *GostSuite) TestTimers(c *C) {
 		{"foobar.timer.mean", 200.0},
 		{"foobar.timer.stdev", math.Sqrt((2*100.0*100.0 + 200.0*200.0) / 3)},
 
-		{"baz.timer.count", 1.0},
-		{"baz.timer.rate", 0.5},
+		{"baz.timer.count", 5.0},
+		{"baz.timer.rate", 2.5},
 		{"baz.timer.min", 500.0},
 		{"baz.timer.max", 500.0},
 		{"baz.timer.median", 500.0},
