@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	sanitizeSpaces     = regexp.MustCompile(`\s+`)
-	sanitizeSlashes    = strings.NewReplacer("/", "-")
+	sanitizeSpaces  = regexp.MustCompile(`\s+`)
+	sanitizeSlashes = strings.NewReplacer("/", "-")
 	// Printable ascii characters that aren't allowed
 	sanitizeDisallowed = ` <>/`
 	dbg                _dbg
