@@ -119,12 +119,12 @@ func clearStats() {
 func postProcessStats() {
 	// Compute the per-second rate for each counter
 	rateFactor := float64(conf.FlushIntervalMS) / 1000
-	for key, value := range stats.Get("counters") {
-		stats.Set("counter_rates", key, value/rateFactor)
+	for key, value := range stats.Get("count") {
+		stats.Set("rate", key, value/rateFactor)
 	}
 	// Compute the size of each set
 	for key, value := range setValues {
-		stats.Set("sets", key, float64(len(value)))
+		stats.Set("set", key, float64(len(value)))
 	}
 
 	// Process all the various stats for each timer
@@ -134,8 +134,8 @@ func postProcessStats() {
 		}
 		timerStats := make(map[string]float64)
 		count := float64(len(values))
-		// count_rate is the rate (per second) at which timings were recorded (scaled for the sampling rate).
-		timerStats["count_rate"] = stats.Get("timers.count")[key] / rateFactor
+		// rate is the rate (per second) at which timings were recorded (scaled for the sampling rate).
+		timerStats["rate"] = stats.Get("timer.count")[key] / rateFactor
 		// sum is the total sum of all timings. You can use count and sum to compute statistics across buckets.
 		sum := 0.0
 		for _, t := range values {
@@ -160,7 +160,7 @@ func postProcessStats() {
 		}
 		// Now write out all these stats as namespaced keys
 		for statName, value := range timerStats {
-			k := "timers." + statName
+			k := "timer." + statName
 			stats.Set(k, key, value)
 		}
 	}
@@ -175,7 +175,7 @@ func createGraphiteMessage() (n int, msg []byte) {
 	for typ, s := range stats {
 		for key, value := range s {
 			n++
-			fmt.Fprintf(buf, "%s %f %d\n", strings.Join(append(namespace, typ, key), "."), value, timestamp)
+			fmt.Fprintf(buf, "%s %f %d\n", strings.Join(append(namespace, key, typ), "."), value, timestamp)
 		}
 	}
 	return n, buf.Bytes()
@@ -191,18 +191,18 @@ func aggregate() {
 			key := strings.Join(stat.Name, ".")
 			switch stat.Type {
 			case StatCounter:
-				stats.Inc("counters", key, stat.Value/stat.SampleRate)
+				stats.Inc("count", key, stat.Value/stat.SampleRate)
 			case StatSet:
 				set, ok := setValues[key]
 				if ok {
 					set[stat.Value] = struct{}{}
 				} else {
-					setValues[key] = map[float64]struct{}{stat.Value: struct{}{}}
+					setValues[key] = map[float64]struct{}{stat.Value: {}}
 				}
 			case StatGauge:
-				stats.Set("gauges", key, stat.Value)
+				stats.Set("gauge", key, stat.Value)
 			case StatTimer:
-				stats.Inc("timers.count", key, 1.0/stat.SampleRate)
+				stats.Inc("timer.count", key, 1.0/stat.SampleRate)
 				timerValues[key] = append(timerValues[key], stat.Value)
 			}
 		case <-ticker:

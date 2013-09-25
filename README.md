@@ -40,8 +40,8 @@ A counter records occurrences of some event, or other values that can be accumul
 
 For each counter, gost records two metrics:
 
-* `counter`: the raw counts (scaled for sample rate)
-* `counter_rate`: the rate, per second
+* `count`: the raw counts (scaled for sample rate)
+* `rate`: the rate, per second
 
 Syntax: `<key>:<value>|c(|@<sampling-rate>)?`
 
@@ -55,13 +55,13 @@ Examples:
 Timers are for measuring the elapsed time of some operation. These are more complex than the other kinds of
 stats. For each timer key, gost records the following metrics during each flush period:
 
-* `timers.count`: the number of timer calls that have been recorded (scaled for the sample rate)
-* `timers.count_rate`: the rate at which timer calls came in, per second
-* `timers.min`, `timers.max`: the min and max values of the timer during the flush interval
-* `timers.mean`, `timers.median`, `timers.stdev`: the mean, median, and standard deviation, respectively, of
+* `timer.count`: the number of timer calls that have been recorded (scaled for the sample rate)
+* `timer.rate`: the rate at which timer calls came in, per second
+* `timer.min`, `timer.max`: the min and max values of the timer during the flush interval
+* `timer.mean`, `timer.median`, `timer.stdev`: the mean, median, and standard deviation, respectively, of
   the timer values during the flush interval
-* `timers.sum`: the total sum of all timer values during the interval. This value, in concert with
-  `timers.count`, can be used (by some other system) to compute mean values across flush buckets.
+* `timer.sum`: the total sum of all timer values during the interval. This value, in concert with
+  `timer.count`, can be used (by some other system) to compute mean values across flush buckets.
 
 Syntax: `<key>:<value>|ms(|@<sampling-rate>)?`
 

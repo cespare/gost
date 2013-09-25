@@ -204,31 +204,31 @@ func checkAllApprox(c *C, tests []testCase) {
 func (s *GostSuite) TestCounters(c *C) {
 	sendGostMessages(c, "foobar:3|c", "foobar:5|c", "baz:2|c")
 	checkAllApprox(c, []testCase{
-		{"counters.foobar", 8.0},
-		{"counter_rates.foobar", 4.0},
-		{"counters.baz", 2.0},
-		{"counter_rates.baz", 1.0},
+		{"foobar.count", 8.0},
+		{"foobar.rate", 4.0},
+		{"baz.count", 2.0},
+		{"baz.rate", 1.0},
 	})
 }
 
 func (s *GostSuite) TestTimers(c *C) {
 	sendGostMessages(c, "foobar:100|ms", "foobar:100|ms", "foobar:400|ms", "baz:500|ms")
 	checkAllApprox(c, []testCase{
-		{"timers.count.foobar", 3.0},
-		{"timers.count_rate.foobar", 1.5},
-		{"timers.min.foobar", 100.0},
-		{"timers.max.foobar", 400.0},
-		{"timers.median.foobar", 100.0},
-		{"timers.mean.foobar", 200.0},
-		{"timers.stdev.foobar", math.Sqrt((2*100.0*100.0 + 200.0*200.0) / 3)},
+		{"foobar.timer.count", 3.0},
+		{"foobar.timer.rate", 1.5},
+		{"foobar.timer.min", 100.0},
+		{"foobar.timer.max", 400.0},
+		{"foobar.timer.median", 100.0},
+		{"foobar.timer.mean", 200.0},
+		{"foobar.timer.stdev", math.Sqrt((2*100.0*100.0 + 200.0*200.0) / 3)},
 
-		{"timers.count.baz", 1.0},
-		{"timers.count_rate.baz", 0.5},
-		{"timers.min.baz", 500.0},
-		{"timers.max.baz", 500.0},
-		{"timers.median.baz", 500.0},
-		{"timers.mean.baz", 500.0},
-		{"timers.stdev.baz", 0.0},
+		{"baz.timer.count", 1.0},
+		{"baz.timer.rate", 0.5},
+		{"baz.timer.min", 500.0},
+		{"baz.timer.max", 500.0},
+		{"baz.timer.median", 500.0},
+		{"baz.timer.mean", 500.0},
+		{"baz.timer.stdev", 0.0},
 	})
 }
 
@@ -240,16 +240,16 @@ func (s *GostSuite) TestGauges(c *C) {
 	sendGostMessages(c, "foobar:4|g", "baz:1|g")
 
 	checkAllApprox(c, []testCase{
-		{"gauges.foobar", 4.0},
-		{"gauges.baz", 1.0},
+		{"foobar.gauge", 4.0},
+		{"baz.gauge", 1.0},
 	})
 }
 
 func (s *GostSuite) TestSets(c *C) {
 	sendGostMessages(c, "foobar:123|s", "foobar:234|s", "foobar:123|s", "baz:456|s")
 	checkAllApprox(c, []testCase{
-		{"sets.foobar", 2.0},
-		{"sets.baz", 1.0},
+		{"foobar.set", 2.0},
+		{"baz.set", 1.0},
 	})
 }
 
@@ -258,7 +258,7 @@ func (s *GostSuite) TestMetaStats(c *C) {
 	sendGostMessages(c, "baz:300|g")
 	sendGostMessages(c, "baz:300|asdfasdf")
 	checkAllApprox(c, []testCase{
-		{"counters.gost.bad_messages_seen", 2.0},
-		{"counters.gost.packets_received", 5.0},
+		{"gost.bad_messages_seen.count", 2.0},
+		{"gost.packets_received.count", 5.0},
 	})
 }
