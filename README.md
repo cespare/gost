@@ -82,7 +82,7 @@ that were given under a particular key during a flush interval.
 
 Syntax: `<key>:<value>|s`
 
-Example: `user_id:135:s`
+Example: `user_id:135|s`
 
 ### Meta-stats
 
