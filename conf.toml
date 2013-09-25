@@ -7,6 +7,11 @@ port = 8125
 # Print some verbose debugging information
 debug = true
 
+# This option controls whether gost clears out stats after it flushes. If true, gost won't remember what stats
+# it has seen; if false, it will set counts to 0 (and leave gauges at the previous value) but keep sending the
+# zeroed-out values.
+clear_stats_between_flushes = false
+
 # Interval to flush to graphite in milliseconds
 flush_interval_ms = 2000
 

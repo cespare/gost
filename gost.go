@@ -27,8 +27,8 @@ var (
 
 	stats = NewBufferedCounts() // e.g. counters -> { foo.bar -> 2 }
 	// sets and timers require additional structures for intermediate computations.
-	setValues     map[string]map[float64]struct{}
-	timerValues   map[string][]float64
+	setValues     = make(map[string]map[float64]struct{})
+	timerValues   = make(map[string][]float64)
 	tagToStatType = map[string]StatType{
 		"c":  StatCounter,
 		"g":  StatGauge,
@@ -70,12 +70,13 @@ type OsStatsConf struct {
 }
 
 type Conf struct {
-	GraphiteAddr    string       `toml:"graphite_addr"`
-	Port            int          `toml:"port"`
-	Debug           bool         `toml:"debug"`
-	FlushIntervalMS int          `toml:"flush_interval_ms"`
-	Namespace       string       `toml:"namespace"`
-	OsStats         *OsStatsConf `toml:"os_stats"`
+	GraphiteAddr             string       `toml:"graphite_addr"`
+	Port                     int          `toml:"port"`
+	Debug                    bool         `toml:"debug"`
+	ClearStatsBetweenFlushes bool         `toml:"clear_stats_between_flushes"`
+	FlushIntervalMS          int          `toml:"flush_interval_ms"`
+	Namespace                string       `toml:"namespace"`
+	OsStats                  *OsStatsConf `toml:"os_stats"`
 }
 
 func handleMessages(messages []byte) {
@@ -110,9 +111,28 @@ func clientServer(c *net.UDPConn) error {
 
 // clearStats resets the state of all the stat types.
 func clearStats() {
-	stats.Clear()
-	setValues = make(map[string]map[float64]struct{})
+	// There aren't great semantics for persisting timer values, so we clear them regardless.
 	timerValues = make(map[string][]float64)
+
+	if conf.ClearStatsBetweenFlushes {
+		for name := range stats {
+			delete(stats, name)
+		}
+		setValues = make(map[string]map[float64]struct{})
+	} else {
+		for name, s := range stats {
+			if strings.HasPrefix(name, "timer.") {
+				delete(stats, name)
+			} else if name != "gauge" {
+				for k := range s {
+					s[k] = 0
+				}
+			}
+		}
+		for k := range setValues {
+			setValues[k] = make(map[float64]struct{})
+		}
+	}
 }
 
 // postProcessStats computes derived stats prior to flushing.

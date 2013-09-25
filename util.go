@@ -138,9 +138,3 @@ func (c BufferedCounts) Inc(key1, key2 string, delta float64) {
 		c[key1] = map[string]float64{key2: delta}
 	}
 }
-
-func (c BufferedCounts) Clear() {
-	for k := range c {
-		delete(c, k)
-	}
-}

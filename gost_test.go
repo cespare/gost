@@ -44,8 +44,9 @@ func (s *GostSuite) SetUpSuite(c *C) {
 func (s *GostSuite) SetUpTest(c *C) {
 	rec.Start()
 	conf = &Conf{
-		GraphiteAddr:    rec.Addr,
-		FlushIntervalMS: 2000, // Fake
+		GraphiteAddr:             rec.Addr,
+		ClearStatsBetweenFlushes: true,
+		FlushIntervalMS:          2000, // Fake
 	}
 	namespace = []string{"com", "example"}
 	udp, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
@@ -100,6 +101,8 @@ type recorder struct {
 	Messages chan *graphiteMessage
 }
 
+// waitForMessage spams flush until a message comes out. It's pretty hacky. It only works when clearing is
+// turned off; otherwise you'll get lots of messages (not just the ones you intended).
 func (r *recorder) waitForMessage() *graphiteMessage {
 	ticker := time.NewTicker(time.Millisecond)
 	for {
@@ -267,4 +270,40 @@ func (s *GostSuite) TestMetaStats(c *C) {
 		{"gost.bad_messages_seen.count", 2.0},
 		{"gost.packets_received.count", 5.0},
 	})
+}
+
+func (s *GostSuite) TestWithStatClearing(c *C) {
+	conf.ClearStatsBetweenFlushes = true
+	sendGostMessages(c, "a:1|c")
+	sendGostMessages(c, "b:2|ms")
+	sendGostMessages(c, "c:3|g")
+	sendGostMessages(c, "d:4|s")
+	rec.waitForMessage()
+	sendGostMessages(c, "foobar:2|c")
+	msg := rec.waitForMessage()
+	for _, key := range []string{"a", "b", "c", "d"} {
+		c.Check(msg.Parsed["com.example."+key+".count"], IsNil)
+	}
+	c.Check(msg.Parsed["com.example.foobar.count"].Value, approx, 2.0)
+}
+
+// TODO: this test is timing-sensitive and I've hacked around that with sleeps. Fix this.
+func (s *GostSuite) TestWithoutStatClearing(c *C) {
+	conf.ClearStatsBetweenFlushes = false
+	sendGostMessages(c, "a:1|c")
+	sendGostMessages(c, "b:2|ms")
+	sendGostMessages(c, "c:3|g")
+	sendGostMessages(c, "d:4|s")
+	time.Sleep(time.Millisecond)
+	flushChan <- when
+	<-rec.Messages
+	sendGostMessages(c, "foobar:2|c")
+	time.Sleep(time.Millisecond)
+	flushChan <- when
+	msg := <-rec.Messages
+	c.Check(msg.Parsed["com.example.a.count"].Value, approx, 0.0)
+	c.Check(msg.Parsed["com.example.b.timer.count"], IsNil)
+	c.Check(msg.Parsed["com.example.c.gauge"].Value, approx, 3.0)
+	c.Check(msg.Parsed["com.example.d.set"].Value, approx, 0.0)
+	c.Check(msg.Parsed["com.example.foobar.count"].Value, approx, 2.0)
 }
