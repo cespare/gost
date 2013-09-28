@@ -266,7 +266,7 @@ func flush() {
 // dServer listens on a local tcp port and prints out debugging info to clients that connect.
 type dServer struct {
 	Clients []net.Conn
-	Closed chan net.Conn
+	Closed  chan net.Conn
 	In      chan []byte
 	Out     chan []byte
 }
@@ -274,8 +274,8 @@ type dServer struct {
 func newDServer() *dServer {
 	return &dServer{
 		Closed: make(chan net.Conn, 1),
-		In:  make(chan []byte),
-		Out: make(chan []byte),
+		In:     make(chan []byte),
+		Out:    make(chan []byte),
 	}
 }
 
