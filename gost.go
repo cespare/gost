@@ -23,7 +23,7 @@ var (
 	configFile = flag.String("conf", "conf.toml", "TOML configuration file")
 	conf       *Conf
 
-	namespace []string                              // determined from conf.Namespace
+	namespace string                                // determined from conf.Namespace
 	incoming  = make(chan *Stat, incomingQueueSize) // incoming stats are passed to the aggregator
 	outgoing  = make(chan []byte)                   // outgoing Graphite messages
 
@@ -56,7 +56,7 @@ const (
 
 type Stat struct {
 	Type       StatType
-	Name       []string
+	Name       string
 	Value      float64
 	SampleRate float64
 }
@@ -204,7 +204,8 @@ func createGraphiteMessage() (n int, msg []byte) {
 	for typ, s := range stats {
 		for key, value := range s {
 			n++
-			fmt.Fprintf(buf, "%s %f %d\n", strings.Join(append(namespace, key, typ), "."), value, timestamp)
+			fullKey := namespace + "." + key + "." + typ
+			fmt.Fprintf(buf, "%s %f %d\n", fullKey, value, timestamp)
 		}
 	}
 	return n, buf.Bytes()
@@ -217,7 +218,7 @@ func aggregate() {
 	for {
 		select {
 		case stat := <-incoming:
-			key := strings.Join(stat.Name, ".")
+			key := stat.Name
 			switch stat.Type {
 			case StatCounter:
 				stats.Inc("count", key, stat.Value/stat.SampleRate)

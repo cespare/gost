@@ -48,7 +48,7 @@ func (s *GostSuite) SetUpTest(c *C) {
 		ClearStatsBetweenFlushes: true,
 		FlushIntervalMS:          2000, // Fake
 	}
-	namespace = []string{"com", "example"}
+	namespace = "com.example"
 
 	// Bind to any port
 	if err := debugServer.Start(0); err != nil {

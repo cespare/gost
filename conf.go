@@ -9,7 +9,7 @@ import (
 )
 
 // filterNamespace replaces templated fields in the user-provided namespace and sanitizes it.
-func filterNamespace(ns string) []string {
+func filterNamespace(ns string) string {
 	hostname, err := os.Hostname()
 	if err != nil {
 		log.Fatal(err)

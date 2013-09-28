@@ -26,7 +26,7 @@ func (d _dbg) Println(args ...interface{}) {
 func metaCount(name string) {
 	s := &Stat{
 		Type:       StatCounter,
-		Name:       []string{"gost", name},
+		Name:       "gost." + name,
 		Value:      1.0,
 		SampleRate: 1.0,
 	}
@@ -41,13 +41,11 @@ func isSpace(c byte) bool {
 // - collapse consecutive spaces into single _
 // - Replace / with -
 // - Remove disallowed characters (< and >)
-// - Split into pieces on .
 // This used to be done with a combination of strings.Replacer, regular expressions, and strings.Map, but was
 // rewritten to do a single pass for efficiency.
-func sanitizeKey(key []byte) []string {
+func sanitizeKey(key []byte) string {
 	inSpace := false
 	var buf bytes.Buffer
-	result := make([]string, 0, 1) // Typical keys have 1 part only
 	for _, c := range key {
 		if inSpace {
 			if isSpace(c) {
@@ -65,17 +63,11 @@ func sanitizeKey(key []byte) []string {
 		case '/':
 			buf.WriteByte('-')
 		case '<', '>': // disallowed
-		case '.':
-			result = append(result, buf.String())
-			buf.Reset()
 		default:
 			buf.WriteByte(c)
 		}
 	}
-	if buf.Len() > 0 {
-		result = append(result, buf.String())
-	}
-	return result
+	return buf.String()
 }
 
 func parseStatsdMessage(msg []byte) (stat *Stat, ok bool) {

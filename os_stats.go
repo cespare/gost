@@ -35,10 +35,10 @@ func osLoadAverages() (avgs [3]float64, err error) {
 	return avgs, nil
 }
 
-func osGauge(name []string, value float64) {
+func osGauge(name string, value float64) {
 	incoming <- &Stat{
 		Type:       StatGauge,
-		Name:       append([]string{"gost", "os_stats"}, name...),
+		Name:       "gost.os_stats" + name,
 		Value:      value,
 		SampleRate: 1.0,
 	}
@@ -55,11 +55,11 @@ func reportLoadAverages() {
 		return
 	}
 	for _, typ := range conf.OsStats.LoadAvg {
-		osGauge([]string{fmt.Sprintf("load_avg_%d", typ)}, loadAverages[loadAvgTypeToIdx[typ]])
+		osGauge(fmt.Sprintf("load_avg_%d", typ), loadAverages[loadAvgTypeToIdx[typ]])
 	}
 
 	for _, typ := range conf.OsStats.LoadAvgPerCPU {
-		osGauge([]string{fmt.Sprintf("load_avg_per_cpu_%d", typ)}, loadAverages[loadAvgTypeToIdx[typ]]/nCPU)
+		osGauge(fmt.Sprintf("load_avg_per_cpu_%d", typ), loadAverages[loadAvgTypeToIdx[typ]]/nCPU)
 	}
 }
 
@@ -78,7 +78,7 @@ func reportDiskUsage() {
 		} else {
 			used = float64(usedBlocks) / float64(buf.Blocks) // fraction of space used
 		}
-		osGauge([]string{"disk_usage", name}, used)
+		osGauge("disk_usage"+name, used)
 	}
 }
 
