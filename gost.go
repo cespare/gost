@@ -329,6 +329,8 @@ func (s *dServer) PrintDebugLine(tag string, message []byte) {
 		msg := append([]byte(tag), line...)
 		msg = append(msg, '\n')
 		for _, c := range s.Clients {
+			// Set an aggressive write timeout so a slow debug client can't impact performance.
+			c.SetWriteDeadline(time.Now().Add(10 * time.Millisecond))
 			if _, err := c.Write(msg); err != nil {
 				closed = append(closed, c)
 				continue
