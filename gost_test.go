@@ -323,3 +323,13 @@ func (s *GostSuite) TestSanitization(c *C) {
 		{"foo.bar.baz.count", 1.0},
 	})
 }
+
+func (s *GostSuite) TestSampleRates(c *C) {
+	sendGostMessages(c, "a:1|c|@0.1", "b:1|c|@1.0", "c:1|c|@3.0", "d:1|c|@0.0", "e:1|c|@-0.5")
+	msg := rec.waitForMessage()
+	c.Check(msg.Parsed["com.example.a.count"].Value, approx, 10.0)
+	c.Check(msg.Parsed["com.example.b.count"].Value, approx, 1.0)
+	for _, key := range []string{"c", "d", "e"} {
+		c.Check(msg.Parsed["com.example."+key+".count"], IsNil)
+	}
+}

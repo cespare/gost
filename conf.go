@@ -15,7 +15,11 @@ func filterNamespace(ns string) string {
 		log.Fatal(err)
 	}
 	ns = strings.NewReplacer("%H", hostname).Replace(ns)
-	return sanitizeKey([]byte(ns))
+	sanitized, ok, rest := parseKey([]byte(ns + ":"))
+	if !ok || len(rest) > 0 {
+		log.Fatal("Bad tag:", ns)
+	}
+	return sanitized
 }
 
 func parseConf() {
