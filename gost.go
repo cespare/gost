@@ -266,16 +266,14 @@ func flush() {
 // dServer listens on a local tcp port and prints out debugging info to clients that connect.
 type dServer struct {
 	Clients []net.Conn
-	Closed  chan net.Conn
 	In      chan []byte
 	Out     chan []byte
 }
 
 func newDServer() *dServer {
 	return &dServer{
-		Closed: make(chan net.Conn, 1),
-		In:     make(chan []byte),
-		Out:    make(chan []byte),
+		In:  make(chan []byte),
+		Out: make(chan []byte),
 	}
 }
 
@@ -301,14 +299,6 @@ func (s *dServer) Start(port int) error {
 			select {
 			case c := <-newConns:
 				s.Clients = append(s.Clients, c)
-			case client := <-s.Closed:
-				for i, c := range s.Clients {
-					if c == client {
-						s.Clients = append(s.Clients[:i], s.Clients[i+1:]...)
-						client.Close()
-						break
-					}
-				}
 			case msg := <-s.In:
 				s.PrintDebugLine("[in] ", msg)
 			case msg := <-s.Out:
@@ -319,17 +309,32 @@ func (s *dServer) Start(port int) error {
 	return nil
 }
 
+func (s *dServer) closeClient(client net.Conn) {
+	for i, c := range s.Clients {
+		if c == client {
+			s.Clients = append(s.Clients[:i], s.Clients[i+1:]...)
+			client.Close()
+			return
+		}
+	}
+}
+
 func (s *dServer) PrintDebugLine(tag string, message []byte) {
-	for _, client := range s.Clients {
-		for _, line := range bytes.Split(message, []byte{'\n'}) {
-			if len(line) == 0 {
+	closed := []net.Conn{}
+	for _, line := range bytes.Split(message, []byte{'\n'}) {
+		if len(line) == 0 {
+			continue
+		}
+		msg := append([]byte(tag), line...)
+		msg = append(msg, '\n')
+		for _, c := range s.Clients {
+			if _, err := c.Write(msg); err != nil {
+				closed = append(closed, c)
 				continue
 			}
-			msg := append([]byte(tag), line...)
-			msg = append(msg, '\n')
-			if _, err := client.Write(msg); err != nil {
-				s.Closed <- client
-			}
+		}
+		for _, c := range closed {
+			s.closeClient(c)
 		}
 	}
 }
