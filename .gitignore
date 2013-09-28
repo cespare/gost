@@ -1,1 +1,3 @@
 /gost
+/gost.test
+*.pprof

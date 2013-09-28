@@ -9,13 +9,13 @@ import (
 )
 
 // filterNamespace replaces templated fields in the user-provided namespace and sanitizes it.
-func filterNamespace(ns string) string {
+func filterNamespace(ns string) []string {
 	hostname, err := os.Hostname()
 	if err != nil {
 		log.Fatal(err)
 	}
 	ns = strings.NewReplacer("%H", hostname).Replace(ns)
-	return sanitizeKey(ns)
+	return sanitizeKey([]byte(ns))
 }
 
 func parseConf() {
@@ -73,9 +73,5 @@ func parseConf() {
 		}
 	}
 
-	parts := strings.Split(conf.Namespace, ".")
-	namespace = make([]string, len(parts))
-	for i, part := range parts {
-		namespace[i] = filterNamespace(part)
-	}
+	namespace = filterNamespace(conf.Namespace)
 }

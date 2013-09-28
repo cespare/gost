@@ -313,3 +313,13 @@ func (s *GostSuite) TestWithoutStatClearing(c *C) {
 	c.Check(msg.Parsed["com.example.d.set"].Value, approx, 0.0)
 	c.Check(msg.Parsed["com.example.foobar.count"].Value, approx, 2.0)
 }
+
+func (s *GostSuite) TestSanitization(c *C) {
+	sendGostMessages(c, "foo  \tbar baz:1|c", "fo/o/bar:1|c", "<ba<z>:1|c", "foo.bar.baz:1|c")
+	checkAllApprox(c, []testCase{
+		{"foo_bar_baz.count", 1.0},
+		{"fo-o-bar.count", 1.0},
+		{"baz.count", 1.0},
+		{"foo.bar.baz.count", 1.0},
+	})
+}

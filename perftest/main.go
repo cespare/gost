@@ -13,9 +13,9 @@ import (
 const (
 	// Must be aligned with statsd's flush interval
 	interval    = 1000 * time.Second
-	testLength  = 30 * time.Second
+	testLength  = 500 * time.Second
 	parallelism = 10
-	startDelay  = 50 * time.Microsecond
+	startDelay  = 30 * time.Microsecond
 
 	listenaddr = "localhost:2003"
 	statsdaddr = "localhost:8125"

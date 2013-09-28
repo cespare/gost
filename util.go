@@ -3,18 +3,10 @@ package main
 import (
 	"bytes"
 	"log"
-	"regexp"
 	"strconv"
-	"strings"
 )
 
-var (
-	sanitizeSpaces  = regexp.MustCompile(`\s+`)
-	sanitizeSlashes = strings.NewReplacer("/", "-")
-	// Printable ascii characters that aren't allowed
-	sanitizeDisallowed = ` <>/`
-	dbg                _dbg
-)
+var dbg _dbg
 
 type _dbg struct{}
 
@@ -41,17 +33,49 @@ func metaCount(name string) {
 	incoming <- s
 }
 
-func removeDisallowedKeyRunes(r rune) rune {
-	if strings.IndexRune(sanitizeDisallowed, r) < 0 {
-		return r
-	}
-	return -1
+func isSpace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\r' || c == '\n'
 }
 
-func sanitizeKey(key string) string {
-	key = sanitizeSpaces.ReplaceAllLiteralString(key, "_")
-	key = sanitizeSlashes.Replace(key)
-	return strings.Map(removeDisallowedKeyRunes, key)
+// sanitize key does several things:
+// - collapse consecutive spaces into single _
+// - Replace / with -
+// - Remove disallowed characters (< and >)
+// - Split into pieces on .
+// This used to be done with a combination of strings.Replacer, regular expressions, and strings.Map, but was
+// rewritten to do a single pass for efficiency.
+func sanitizeKey(key []byte) []string {
+	inSpace := false
+	var buf bytes.Buffer
+	result := make([]string, 0, 1) // Typical keys have 1 part only
+	for _, c := range key {
+		if inSpace {
+			if isSpace(c) {
+				continue // Still in a space group
+			}
+			buf.WriteByte('_')
+			inSpace = false
+		}
+		if isSpace(c) {
+			inSpace = true
+			continue
+		}
+
+		switch c {
+		case '/':
+			buf.WriteByte('-')
+		case '<', '>': // disallowed
+		case '.':
+			result = append(result, buf.String())
+			buf.Reset()
+		default:
+			buf.WriteByte(c)
+		}
+	}
+	if buf.Len() > 0 {
+		result = append(result, buf.String())
+	}
+	return result
 }
 
 func parseStatsdMessage(msg []byte) (stat *Stat, ok bool) {
@@ -65,12 +89,7 @@ func parseStatsdMessage(msg []byte) (stat *Stat, ok bool) {
 	if len(parts) != 2 {
 		return nil, false
 	}
-	nameParts := strings.Split(string(parts[0]), ".")
-	stat.Name = make([]string, len(nameParts))
-	for i, part := range nameParts {
-		stat.Name[i] = sanitizeKey(part)
-	}
-
+	stat.Name = sanitizeKey(parts[0])
 	fields := bytes.Split(parts[1], []byte{'|'})
 	if len(fields) < 2 || len(fields) > 3 {
 		return nil, false
