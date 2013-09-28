@@ -249,7 +249,6 @@ func aggregate() {
 // flush pushes outgoing messages to graphite.
 func flush() {
 	for msg := range outgoing {
-		dbg.Printf("Sending message:\n%s\n", msg)
 		debugServer.Out <- msg
 		conn, err := net.Dial("tcp", conf.GraphiteAddr)
 		if err != nil {
@@ -299,6 +298,7 @@ func (s *dServer) Start(port int) error {
 			select {
 			case c := <-newConns:
 				s.Clients = append(s.Clients, c)
+				dbg.Printf("Debug client connected. Currently %d connected client(s).", len(s.Clients))
 			case msg := <-s.In:
 				s.PrintDebugLine("[in] ", msg)
 			case msg := <-s.Out:
@@ -314,6 +314,7 @@ func (s *dServer) closeClient(client net.Conn) {
 		if c == client {
 			s.Clients = append(s.Clients[:i], s.Clients[i+1:]...)
 			client.Close()
+			dbg.Printf("Debug client disconnected. Currently %d connected client(s).", len(s.Clients))
 			return
 		}
 	}
