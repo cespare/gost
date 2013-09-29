@@ -10,8 +10,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/davecheney/profile"
 )
 
 const (
@@ -361,8 +359,6 @@ func (s *dServer) PrintDebugLine(tag string, message []byte) {
 }
 
 func main() {
-	defer profile.Start(profile.CPUProfile).Stop()
-
 	flag.Parse()
 	parseConf()
 	flushTicker = func() <-chan time.Time {
