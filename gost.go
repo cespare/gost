@@ -29,14 +29,8 @@ var (
 
 	stats = NewBufferedCounts() // e.g. counters -> { foo.bar -> 2 }
 	// sets and timers require additional structures for intermediate computations.
-	setValues     = make(map[string]map[float64]struct{})
-	timerValues   = make(map[string][]float64)
-	tagToStatType = map[string]StatType{
-		"c":  StatCounter,
-		"g":  StatGauge,
-		"ms": StatTimer,
-		"s":  StatSet,
-	}
+	setValues   = make(map[string]map[float64]struct{})
+	timerValues = make(map[string][]float64)
 
 	debugServer = newDServer()
 
@@ -59,6 +53,27 @@ type Stat struct {
 	Name       string
 	Value      float64
 	SampleRate float64
+}
+
+// tagToStatType maps a tag (e.g., []byte("c")) to a StatType (e.g., StatCounter).
+// NOTE: This used to be a map[string]StatType but was changed for performance reasons.
+func tagToStatType(b []byte) (StatType, bool) {
+	switch len(b) {
+	case 1:
+		switch b[0] {
+		case 'c':
+			return StatCounter, true
+		case 'g':
+			return StatGauge, true
+		case 's':
+			return StatSet, true
+		}
+	case 2:
+		if b[0] == 'm' && b[1] == 's' {
+			return StatTimer, true
+		}
+	}
+	return 0, false
 }
 
 type DiskUsageConf struct {

@@ -118,7 +118,7 @@ func parseMetricType(b []byte) (typ StatType, ok bool, rest []byte) {
 		}
 	}
 
-	typ, ok = tagToStatType[string(tag)]
+	typ, ok = tagToStatType(tag)
 	if !ok {
 		return 0, false, nil
 	}
