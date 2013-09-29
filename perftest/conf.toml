@@ -1,0 +1,8 @@
+graphite_addr = "localhost:2003"
+port = 8125
+debug_port = 8126
+debug_logging = true
+clear_stats_between_flushes = false
+flush_interval_ms = 100000
+namespace = "example.%H"
+meta_stats = true

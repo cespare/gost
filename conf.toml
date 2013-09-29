@@ -16,7 +16,7 @@ debug_logging = true
 clear_stats_between_flushes = false
 
 # Interval to flush to graphite in milliseconds
-flush_interval_ms = 100000
+flush_interval_ms = 2000
 
 # Dot-separated namespace for metrics. %H will be replaced with the machine's hostname. For instance, if
 # namespace is example.%H and the hostname is web-25, then a counter called web.requests would be sent to
@@ -31,23 +31,23 @@ meta_stats = true
 # NOTE: Everything below here is linux-specific. os_stats pulls information from the /proc filesystem and
 # Linux syscalls.
 # NOTE: Delete/comment out the whole os_stats section if you're not using it.
-#[os_stats]
-#
-## check_interval_ms is used to change the frequency OS stat checks are done. If not given, the checks will be
-## performed every flush_interval_ms.
-#check_interval_ms = 30000
-#
-## load_avg and load_avg_per_cpu return the 1/5/15 minute load averages; the latter divides the numbers by the
-## number of logical CPUs to normalize them.
-## NOTE: The valid values are obviously 1, 5, and 15 only.
-#load_avg = [1, 5, 15]
-#load_avg_per_cpu = [1, 5, 15]
-#
-## A disk_usage section generates a gauge for how much space is used on a particular volume.
-#
-## In this example, the gauge is called 'data_volume', it monitors /mnt/data, and the gauge is the absolute
-## amount of space used (in bytes). If "fraction" is used instead, it will report the fraction of the total
-## used (0.0 - 1.0).
-#[os_stats.disk_usage.data_volume]
-#path = "/mnt/data"
-#values = "fraction"
+[os_stats]
+
+# check_interval_ms is used to change the frequency OS stat checks are done. If not given, the checks will be
+# performed every flush_interval_ms.
+check_interval_ms = 30000
+
+# load_avg and load_avg_per_cpu return the 1/5/15 minute load averages; the latter divides the numbers by the
+# number of logical CPUs to normalize them.
+# NOTE: The valid values are obviously 1, 5, and 15 only.
+load_avg = [1, 5, 15]
+load_avg_per_cpu = [1, 5, 15]
+
+# A disk_usage section generates a gauge for how much space is used on a particular volume.
+
+# In this example, the gauge is called 'data_volume', it monitors /mnt/data, and the gauge is the absolute
+# amount of space used (in bytes). If "fraction" is used instead, it will report the fraction of the total
+# used (0.0 - 1.0).
+[os_stats.disk_usage.data_volume]
+path = "/mnt/data"
+values = "fraction"
