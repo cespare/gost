@@ -43,15 +43,15 @@ func isSpace(c byte) bool {
 // - Replace / with -
 // - Remove disallowed characters (< and >)
 // - Stops on : -- this indicates the end of a key
-// Sanitized is the sanitized key part (before the :), ok indicates whether this function successfully found a
+// key is the sanitized key part (before the :), ok indicates whether this function successfully found a
 // : to split on, and rest is the remainder of the input after the :.
 //
 
 // rewritten to do a single pass for efficiency.
-func parseKey(key []byte) (sanitized string, ok bool, rest []byte) {
+func parseKey(b []byte) (key string, ok bool, rest []byte) {
 	inSpace := false
 	var buf bytes.Buffer
-	for i, c := range key {
+	for i, c := range b {
 		if inSpace {
 			if isSpace(c) {
 				continue // Still in a space group
@@ -69,7 +69,7 @@ func parseKey(key []byte) (sanitized string, ok bool, rest []byte) {
 			buf.WriteByte('-')
 		case '<', '>': // disallowed
 		case ':':
-			return buf.String(), true, key[i+1:]
+			return buf.String(), true, b[i+1:]
 		default:
 			buf.WriteByte(c)
 		}
