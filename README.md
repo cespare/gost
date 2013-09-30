@@ -121,3 +121,4 @@ and you will see gost's input and output. This is very handy for debugging, inst
 * Timers don't return as much information as in statsd, and they're not customizable.
 * gost can record os stats from the host and deliver them to graphite as well.
 * The "meta-stats" gost sends back are different from StatsD (there are a lot fewer of them)
+* Gost is very fast. It can handle several times the load statsd can before dropping messages.
