@@ -9,17 +9,25 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
 	incomingQueueSize = 100
-	udpBufSize        = 10e3 // 10kB buffer, so we can handle huge messages
+
+	// Gost used a number of fixed-size buffers for incoming messages to limit allocations. This is controlled
+	// by udpBufSize and nUDPBufs. Note that gost cannot accept statsd messages larger than udpBufSize.
+	// In this case, the total size of buffers for incoming messages is 10e3 * 1000 = 10MB.
+	udpBufSize = 10e3
+	nUDPBufs   = 1000
 )
 
 var (
 	configFile = flag.String("conf", "conf.toml", "TOML configuration file")
 	conf       *Conf
+
+	bufPool = make(chan []byte, nUDPBufs) // pool of buffers for incoming messagse
 
 	namespace string                                // determined from conf.Namespace
 	incoming  = make(chan *Stat, incomingQueueSize) // incoming stats are passed to the aggregator
@@ -30,12 +38,19 @@ var (
 	setValues   = make(map[string]map[float64]struct{})
 	timerValues = make(map[string][]float64)
 
-	debugServer = newDServer()
+	debugServer = &dServer{}
 
 	// flushTicker and now are functions that the tests can stub out.
 	flushTicker func() <-chan time.Time
 	now         func() time.Time = time.Now
 )
+
+func init() {
+	// Preallocate the UDP buffer pool
+	for i := 0; i < nUDPBufs; i++ {
+		bufPool <- make([]byte, udpBufSize)
+	}
+}
 
 type StatType int
 
@@ -97,25 +112,26 @@ type Conf struct {
 	OsStats                  *OsStatsConf `toml:"os_stats"`
 }
 
-func handleMessages(messages []byte) {
-	for _, msg := range bytes.Split(messages, []byte{'\n'}) {
+func handleMessages(buf []byte) {
+	for _, msg := range bytes.Split(buf, []byte{'\n'}) {
 		if len(msg) == 0 {
 			continue
 		}
-		debugServer.In <- msg
+		debugServer.Print("[in] ", msg)
 		stat, ok := parseStatsdMessage(msg)
 		if !ok {
 			log.Println("bad message:", string(msg))
 			metaCount("bad_messages_seen")
-			return
+			continue
 		}
 		incoming <- stat
 	}
+	bufPool <- buf[:udpBufSize] // Reset buf's length and return to the pool
 }
 
 func clientServer(c *net.UDPConn) error {
-	buf := make([]byte, udpBufSize)
 	for {
+		buf := <-bufPool
 		n, _, err := c.ReadFromUDP(buf)
 		// TODO: Should we try to recover from such errors?
 		if err != nil {
@@ -123,11 +139,10 @@ func clientServer(c *net.UDPConn) error {
 		}
 		metaCount("packets_received")
 		if n >= udpBufSize {
-			return fmt.Errorf("UDP message too large.")
+			metaCount("udp_message_too_large")
+			continue
 		}
-		messages := make([]byte, n)
-		copy(messages, buf)
-		go handleMessages(messages)
+		go handleMessages(buf[:n])
 	}
 }
 
@@ -265,7 +280,7 @@ func aggregate() {
 // flush pushes outgoing messages to graphite.
 func flush() {
 	for msg := range outgoing {
-		debugServer.Out <- msg
+		debugServer.Print("[out] ", msg)
 		conn, err := net.Dial("tcp", conf.GraphiteAddr)
 		if err != nil {
 			log.Printf("Error: cannot connect to graphite at %s: %s\n", conf.GraphiteAddr, err)
@@ -280,16 +295,8 @@ func flush() {
 
 // dServer listens on a local tcp port and prints out debugging info to clients that connect.
 type dServer struct {
+	sync.Mutex
 	Clients []net.Conn
-	In      chan []byte
-	Out     chan []byte
-}
-
-func newDServer() *dServer {
-	return &dServer{
-		In:  make(chan []byte),
-		Out: make(chan []byte),
-	}
 }
 
 func (s *dServer) Start(port int) error {
@@ -299,27 +306,16 @@ func (s *dServer) Start(port int) error {
 	if err != nil {
 		return err
 	}
-	newConns := make(chan net.Conn)
 	go func() {
 		for {
 			c, err := listener.Accept()
 			if err != nil {
 				continue
 			}
-			newConns <- c
-		}
-	}()
-	go func() {
-		for {
-			select {
-			case c := <-newConns:
-				s.Clients = append(s.Clients, c)
-				dbg.Printf("Debug client connected. Currently %d connected client(s).", len(s.Clients))
-			case msg := <-s.In:
-				s.PrintDebugLine("[in] ", msg)
-			case msg := <-s.Out:
-				s.PrintDebugLine("[out] ", msg)
-			}
+			s.Lock()
+			s.Clients = append(s.Clients, c)
+			dbg.Printf("Debug client connected. Currently %d connected client(s).", len(s.Clients))
+			s.Unlock()
 		}
 	}()
 	return nil
@@ -336,9 +332,15 @@ func (s *dServer) closeClient(client net.Conn) {
 	}
 }
 
-func (s *dServer) PrintDebugLine(tag string, message []byte) {
+func (s *dServer) Print(tag string, msg []byte) {
+	s.Lock()
+	defer s.Unlock()
+	if len(s.Clients) == 0 {
+		return
+	}
+
 	closed := []net.Conn{}
-	for _, line := range bytes.Split(message, []byte{'\n'}) {
+	for _, line := range bytes.Split(msg, []byte{'\n'}) {
 		if len(line) == 0 {
 			continue
 		}

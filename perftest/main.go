@@ -12,10 +12,10 @@ import (
 
 const (
 	// Must be aligned with statsd's flush interval
-	interval    = 1000 * time.Second
-	testLength  = 500 * time.Second
-	parallelism = 10
-	startDelay  = 30 * time.Microsecond
+	interval    = 20 * time.Second
+	testLength  = 15 * time.Second
+	parallelism = 100
+	startDelay  = 3000 * time.Microsecond
 
 	listenaddr = "localhost:2003"
 	statsdaddr = "localhost:8125"
@@ -60,8 +60,10 @@ func perfWorker(delay time.Duration, counts chan float64) {
 
 func runTest(delay time.Duration) {
 	counts := make(chan float64)
+	betweenDelay := delay / time.Duration(float64(parallelism))
 	for i := 0; i < parallelism; i++ {
 		go perfWorker(delay, counts)
+		time.Sleep(betweenDelay)
 	}
 	var total float64
 	for i := 0; i < parallelism; i++ {
@@ -108,7 +110,7 @@ func main() {
 	delay := startDelay
 	go runTest(delay)
 	for _ = range time.NewTicker(interval).C {
-		delay /= 2
+		delay -= 500 * time.Microsecond
 		go runTest(delay)
 	}
 }
