@@ -333,3 +333,14 @@ func (s *GostSuite) TestSampleRates(c *C) {
 		c.Check(msg.Parsed["com.example."+key+".count"], IsNil)
 	}
 }
+
+func (s *GostSuite) TestMultilineMessage(c *C) {
+	sendGostMessages(c, "foobar:3|c\nfoobar:5|c\nbaz:200|g")
+	checkAllApprox(c, []testCase{
+		{"foobar.count", 8.0},
+		{"foobar.rate", 4.0},
+		{"baz.gauge", 200.0},
+		{"gost.packets_received.count", 1.0},
+		{"gost.packets_received.rate", 0.5},
+	})
+}
