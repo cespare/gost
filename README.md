@@ -117,8 +117,8 @@ subset of the data; for instance:
 
 ## Differences with StatsD
 
-* Gost keys are allowed to be any printable ascii character except space, `<`, `>`, and `/`. Graphite handles
-  this set of keys just fine. (Statsd only allows keys matching `/^[a-zA-Z0-9\-_\.]+$/`.)
+* Gost keys are allowed to be any printable ascii character except space, newline, `<`, `>`, and `/`. Graphite
+  handles this set of keys just fine. (Statsd only allows keys matching `/^[a-zA-Z0-9\-_\.]+$/`.)
 * Gauges cannot be deltas; they must be absolute values.
 * Timers don't return as much information as in statsd, and they're not customizable.
 * gost can record os stats from the host and deliver them to graphite as well.
