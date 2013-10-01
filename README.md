@@ -108,10 +108,12 @@ The `debug_port` setting controls the port of a local server that gost starts up
 print its (UDP) input and (Graphite) output via TCP to any client that connects to this port. So if you're using
 `debug_port = 8126` as in the example config, then you can connect like this:
 
-    telnet localhost 8126
+    $ telnet localhost 8126
 
-and you will see gost's input and output. This is very handy for debugging, instead of changing the
-`debug_logging` setting.
+and you will see gost's input and output. This is very handy for debugging. You may want to filter out just a
+subset of the data; for instance:
+
+    $ netcat localhost 8127 | grep '\[out\]' # just outbound messages
 
 ## Differences with StatsD
 
