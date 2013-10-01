@@ -126,7 +126,7 @@ func handleMessages(buf []byte) {
 		}
 		incoming <- stat
 	}
-	bufPool <- buf[:udpBufSize] // Reset buf's length and return to the pool
+	bufPool <- buf[:cap(buf)] // Reset buf's length and return to the pool
 }
 
 func clientServer(c *net.UDPConn) error {
