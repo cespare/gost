@@ -25,8 +25,8 @@ port configured by the `port` setting in the config file. Typically each message
 messages can be sent in a single packet by separating them with `\n` characters.
 
 There are two data types involved: **keys** and **values**. **keys** are strings formed from any printable
-ascii characters other than space, `<`, `>`, and `/`. (If you send space or `/`, gost will automatically
-change these to `.` and `-`, respectively.) **values** are human-printed floats:
+ascii characters other than space, newline, `<`, `>`, and `/`. (If you send space or `/`, gost will
+automatically change these to `.` and `-`, respectively.) **values** are human-printed floats:
 
     /^[+\-]?\d+(\.\d+)?$/
 
