@@ -38,7 +38,7 @@ func osLoadAverages() (avgs [3]float64, err error) {
 func osGauge(name string, value float64) {
 	incoming <- &Stat{
 		Type:       StatGauge,
-		Name:       "gost.os_stats" + name,
+		Name:       "gost.os_stats." + name,
 		Value:      value,
 		SampleRate: 1.0,
 	}
@@ -78,7 +78,7 @@ func reportDiskUsage() {
 		} else {
 			used = float64(usedBlocks) / float64(buf.Blocks) // fraction of space used
 		}
-		osGauge("disk_usage"+name, used)
+		osGauge("disk_usage."+name, used)
 	}
 }
 
