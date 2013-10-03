@@ -24,9 +24,8 @@ For completeness, here is a summary of the supported messages. All messages are 
 port configured by the `port` setting in the config file. Typically each message is a UDP packet, but multiple
 messages can be sent in a single packet by separating them with `\n` characters.
 
-There are two data types involved: **keys** and **values**. **keys** are strings formed from any printable
-ascii characters other than space, newline, `<`, `>`, and `/`. Gost changes `/` to `_` automatically and
-collapses consecutive spaces to `_`. **values** are human-printed floats:
+There are two data types involved: **keys** and **values**. **keys** are ascii strings (see the Key Format
+section below for details). **values** are human-printed floats:
 
     /^[+\-]?\d+(\.\d+)?$/
 
@@ -94,7 +93,7 @@ Gost sends back some stats about itself to graphite as well. This includes:
 There are some other counters for various error conditions. Most of these also show up in the stdout of gost
 if you use the `debug_logging = true` option in the configuration.
 
-### OS Stats
+### OS stats
 
 One nice feature of gost is that, if you're running on a Linux system, it can automatically send back some
 info about the host. See [the configuration file](conf.toml) for how to set this up.
@@ -115,10 +114,27 @@ subset of the data; for instance:
 
     $ netcat localhost 8127 | grep '\[out\]' # just outbound messages
 
+## Key Format
+
+Gost message keys are formed from printable ascii characters with a few restrictions, listed below. The
+maximum size of a message is 10Kb; this sets the only limit on key length.
+
+source char |             converted to              | reason
+------------|---------------------------------------|-------
+   newline  |                 error                 | newlines end gost messages
+    `:`     |                 error                 | colons end gost keys
+   space    |                  `_`                  | graphite uses space in its message format
+    `/`     |                  `-`                  | graphite can't handle `/` (keys are filenames)
+  `<`, `>`  |                removed                | graphite doesn't handle `<` (`>` excluded for symmetry)
+    `*`     |                removed                | graphite uses `*` as a wildcard
+  `[`, `]`  |                removed                | graphite uses `[...]` for char set matching
+  `{`, `}`, |                removed                | graphite uses `{...}` for matching multiple items
+
+Additionally, note that a trailing `.` on a key will be ignored by Graphite, so `foo.` is the same as `foo`.
+
 ## Differences with StatsD
 
-* Gost keys are allowed to be any printable ascii character except space, newline, `<`, `>`, and `/`. Graphite
-  handles this set of keys just fine. (Statsd only allows keys matching `/^[a-zA-Z0-9\-_\.]+$/`.)
+* Statsd only allows keys matching `/^[a-zA-Z0-9\-_\.]+$/`; gost is more permissive (see Key Format, above).
 * Gauges cannot be deltas; they must be absolute values.
 * Timers don't return as much information as in statsd, and they're not customizable.
 * gost can record os stats from the host and deliver them to graphite as well.

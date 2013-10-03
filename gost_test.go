@@ -6,7 +6,6 @@ import (
 	"log"
 	"math"
 	"net"
-
 	"strings"
 	"sync"
 	"testing"
@@ -315,12 +314,34 @@ func (s *GostSuite) TestWithoutStatClearing(c *C) {
 }
 
 func (s *GostSuite) TestSanitization(c *C) {
-	sendGostMessages(c, "foo  \tbar baz:1|c", "fo/o/bar:1|c", "<ba<z>:1|c", "foo.bar.baz:1|c")
+	allChars := []byte{}
+	for i := 33; i <= 126; i++ {
+		c := byte(i)
+		switch c {
+		case '*', '/', ':', '<', '>', '[', ']', '{', '}':
+			continue
+		}
+		allChars = append(allChars, c)
+	}
+	sendGostMessages(c,
+		fmt.Sprintf("%s:1|c", allChars),
+		"föo\tbar:1|c",  // Non-printable or non-ascii is removed
+		"foo bar:1|c",   // spaces changed to _
+		"foo/bar:1|c",   // / changed to -
+		"rem*ove1:1|c",  // * removed
+		"<remove2>:1|c", // < > removed
+		"[remove3]:1|c", // [ ] removed
+		"{remove4}:1|c", // { } removed
+	)
 	checkAllApprox(c, []testCase{
-		{"foo_bar_baz.count", 1.0},
-		{"fo-o-bar.count", 1.0},
-		{"baz.count", 1.0},
-		{"foo.bar.baz.count", 1.0},
+		{fmt.Sprintf("%s.count", allChars), 1.0},
+		{"fobar.count", 1.0},
+		{"foo_bar.count", 1.0},
+		{"foo-bar.count", 1.0},
+		{"remove1.count", 1.0},
+		{"remove2.count", 1.0},
+		{"remove3.count", 1.0},
+		{"remove4.count", 1.0},
 	})
 }
 

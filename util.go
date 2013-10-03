@@ -38,41 +38,26 @@ func isSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\r' || c == '\n'
 }
 
-// parseKey does several things:
-// - collapse consecutive spaces into single _
-// - Replace / with -
-// - Remove disallowed characters (< and >)
-// - Stops on : -- this indicates the end of a key
-// key is the sanitized key part (before the :), ok indicates whether this function successfully found a
-// : to split on, and rest is the remainder of the input after the :.
-//
-
-// rewritten to do a single pass for efficiency.
+// parseKey does key sanitization (see Key Format in the readme) and stops on ':', which indicates the end of
+// the key. key is the sanitized key part (before the ':'), ok indicates whether this function successfully
+// found a ':' to split on, and rest is the remainder of the input after the ':'.
 func parseKey(b []byte) (key string, ok bool, rest []byte) {
-	inSpace := false
 	var buf bytes.Buffer
 	for i, c := range b {
-		if inSpace {
-			if isSpace(c) {
-				continue // Still in a space group
-			}
-			buf.WriteByte('_')
-			inSpace = false
-		}
-		if isSpace(c) {
-			inSpace = true
+		if c < ' ' || c > '~' { // Remove any byte that isn't a printable ascii char
 			continue
 		}
-
 		switch c {
-		case '/':
-			buf.WriteByte('-')
-		case '<', '>': // disallowed
-		case ':':
+		case ' ': // Replace space with _
+			c = '_'
+		case '/': // Replace / with -
+			c = '-'
+		case '<', '>', '*', '[', ']', '{', '}': // Remove <, >, *, [, ], {, and }
+			continue
+		case ':': // End of key
 			return buf.String(), true, b[i+1:]
-		default:
-			buf.WriteByte(c)
 		}
+		buf.WriteByte(c)
 	}
 	return "", false, nil
 }
