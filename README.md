@@ -117,7 +117,8 @@ subset of the data; for instance:
 ## Key Format
 
 Gost message keys are formed from printable ascii characters with a few restrictions, listed below. The
-maximum size of a message is 10Kb; this sets the only limit on key length.
+maximum size of an accepted UDP packet (which usually contains one message but may contain several separated
+by `\n`) is 10Kb; this sets the only limit on key length.
 
 source char |             converted to              | reason
 ------------|---------------------------------------|-------
