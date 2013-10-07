@@ -273,6 +273,7 @@ func aggregate() {
 				dbg.Println("No stats to flush.")
 			}
 			clearStats()
+			metaGauge("distinct_metrics_flushed", float64(n))
 		}
 	}
 }

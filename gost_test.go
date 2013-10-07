@@ -268,12 +268,22 @@ func (s *GostSuite) TestSets(c *C) {
 }
 
 func (s *GostSuite) TestMetaStats(c *C) {
+	// Make sure that at least one stat has been processed, so that distinct_metrics_flushed is present
+	sendGostMessages(c, "before:1|c")
+	rec.waitForMessage()
+
 	sendGostMessages(c, "foobar:2|c", "foobar:3|g", "foobar:asdf|s")
 	sendGostMessages(c, "baz:300|g")
 	sendGostMessages(c, "baz:300|asdfasdf")
 	checkAllApprox(c, []testCase{
 		{"gost.bad_messages_seen.count", 2.0},
 		{"gost.packets_received.count", 5.0},
+	})
+	checkAllApprox(c, []testCase{
+		// foobar/count (2), foobar/gauge (1), baz/gauge (1), gost.packets_received/count (2),
+		// gost.bad_messages_seen/count (2), gost.distinct_metrics_flushed/gauge (1)
+		// total = 9
+		{"gost.distinct_metrics_flushed.gauge", 9.0},
 	})
 }
 

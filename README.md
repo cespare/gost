@@ -89,6 +89,7 @@ Gost sends back some stats about itself to graphite as well. This includes:
 
 * `gost.bad_messages_seen`: a counter for the number of malformed messages gost has received
 * `gost.packets_received`: a counter for the number of packets gost has read
+* `gost.distinct_metrics_flushed`: a gauge for the number of stats sent to graphite during the previous flush
 
 There are some other counters for various error conditions. Most of these also show up in the stdout of gost
 if you use the `debug_logging = true` option in the configuration.

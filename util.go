@@ -34,6 +34,16 @@ func metaCount(name string) {
 	incoming <- s
 }
 
+// metaGauge sets a gauge for an internal gost stat.
+func metaGauge(name string, value float64) {
+	s := &Stat{
+		Type: StatGauge,
+		Name: "gost." + name,
+		Value: value,
+	}
+	incoming <- s
+}
+
 func isSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\r' || c == '\n'
 }
