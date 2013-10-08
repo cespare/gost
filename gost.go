@@ -273,7 +273,8 @@ func aggregate() {
 				dbg.Println("No stats to flush.")
 			}
 			clearStats()
-			metaGauge("distinct_metrics_flushed", float64(n))
+			// In its own goroutine to avoid deadlock. If the incoming queue is full, this will hang.
+			go metaGauge("distinct_metrics_flushed", float64(n))
 		}
 	}
 }
