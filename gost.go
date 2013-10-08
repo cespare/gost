@@ -38,6 +38,11 @@ var (
 	setValues   = make(map[string]map[float64]struct{})
 	timerValues = make(map[string][]float64)
 
+	forwardingEnabled bool                  // Whether configured to forward to another gost
+	forwarderEnabled  bool                  // Whether configured to receive forwarded messages
+	forwardStats      = NewBufferedCounts() // Forwarded counters and gauges
+	forwardKeyPrefix  = []byte("f|")
+
 	debugServer = &dServer{}
 
 	// flushTicker and now are functions that the tests can stub out.
@@ -63,6 +68,7 @@ const (
 
 type Stat struct {
 	Type       StatType
+	Forwarded  bool
 	Name       string
 	Value      float64
 	SampleRate float64
@@ -103,6 +109,8 @@ type OsStatsConf struct {
 
 type Conf struct {
 	GraphiteAddr             string       `toml:"graphite_addr"`
+	ForwardingAddr           string       `toml:"forwarding_addr"`
+	ForwarderListenAddr      string       `toml:"forwarder_listen_addr"`
 	Port                     int          `toml:"port"`
 	DebugPort                int          `toml:"debug_port"`
 	DebugLogging             bool         `toml:"debug_logging"`
@@ -168,6 +176,13 @@ func clearStats() {
 		}
 		for k := range setValues {
 			setValues[k] = make(map[float64]struct{})
+		}
+	}
+
+	if forwardingEnabled {
+		// Always delete forwarded stats -- they are cleared/preserved between flushes at the receiving end.
+		for name := range forwardStats {
+			delete(forwardStats, name)
 		}
 	}
 }

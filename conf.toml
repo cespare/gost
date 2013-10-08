@@ -1,6 +1,12 @@
 # Graphite backend address
 graphite_addr = "localhost:2003"
 
+# Gost forwarding address -- if this variable is set, forwarding to another gost is enabled
+forwarding_addr = "localhost:8124"
+
+# Bind address to listen on for forwarded messages -- if this is set, gost is configured as a forwarder
+forwarder_listen_addr = ":8124"
+
 # Port to listen (on localhost) for statsd messages from clients over UDP
 port = 8125
 

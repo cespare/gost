@@ -37,8 +37,8 @@ func metaCount(name string) {
 // metaGauge sets a gauge for an internal gost stat.
 func metaGauge(name string, value float64) {
 	s := &Stat{
-		Type: StatGauge,
-		Name: "gost." + name,
+		Type:  StatGauge,
+		Name:  "gost." + name,
 		Value: value,
 	}
 	incoming <- s
@@ -50,10 +50,21 @@ func isSpace(c byte) bool {
 
 // parseKey does key sanitization (see Key Format in the readme) and stops on ':', which indicates the end of
 // the key. key is the sanitized key part (before the ':'), ok indicates whether this function successfully
-// found a ':' to split on, and rest is the remainder of the input after the ':'.
-func parseKey(b []byte) (key string, ok bool, rest []byte) {
+// found a ':' to split on, forwarded indicates whether this key is to be forwarded (forwarded keys start with
+// forwardKeyPrefix and that prefix is stripped from key), and rest is the remainder of the input after the
+// ':'.
+func parseKey(b []byte) (key string, ok bool, forwarded bool, rest []byte) {
 	var buf bytes.Buffer
+	forwarded = forwardingEnabled
 	for i, c := range b {
+		if forwarded && i < len(forwardKeyPrefix) {
+			forwarded = (c == forwardKeyPrefix[i])
+			if forwarded && i == len(forwardKeyPrefix)-1 {
+				// We're forwarding this key; strip the prefix
+				buf.Reset()
+				continue
+			}
+		}
 		if c < ' ' || c > '~' { // Remove any byte that isn't a printable ascii char
 			continue
 		}
@@ -65,11 +76,11 @@ func parseKey(b []byte) (key string, ok bool, rest []byte) {
 		case '<', '>', '*', '[', ']', '{', '}': // Remove <, >, *, [, ], {, and }
 			continue
 		case ':': // End of key
-			return buf.String(), true, b[i+1:]
+			return buf.String(), true, forwarded, b[i+1:]
 		}
 		buf.WriteByte(c)
 	}
-	return "", false, nil
+	return "", false, false, nil
 }
 
 // TODO XXX HACK FIXME
@@ -136,13 +147,11 @@ func parseRate(b []byte) (float64, bool) {
 
 func parseStatsdMessage(msg []byte) (stat *Stat, ok bool) {
 	stat = &Stat{}
-	name, ok, rest := parseKey(msg)
-	if !ok {
+	name, ok, forwarded, rest := parseKey(msg)
+	if !ok || name == "" { // empty name is invalid
 		return nil, false
 	}
-	if name == "" { // empty name is invalid
-		return nil, false
-	}
+	stat.Forwarded = forwarded
 	stat.Name = name
 
 	// NOTE: It looks like statsd will accept multiple values for a key at once (e.g., foo.bar:1|c:2.5|g), but

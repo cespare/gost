@@ -15,7 +15,7 @@ func filterNamespace(ns string) string {
 		log.Fatal(err)
 	}
 	ns = strings.NewReplacer("%H", hostname).Replace(ns)
-	sanitized, ok, rest := parseKey([]byte(ns + ":"))
+	sanitized, ok, _, rest := parseKey([]byte(ns + ":"))
 	if !ok || len(rest) > 0 {
 		log.Fatal("Bad tag:", ns)
 	}
@@ -78,4 +78,6 @@ func parseConf() {
 	}
 
 	namespace = filterNamespace(conf.Namespace)
+	forwardingEnabled = conf.ForwardingAddr != ""
+	forwarderEnabled = conf.ForwarderListenAddr != ""
 }

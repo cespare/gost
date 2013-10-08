@@ -355,6 +355,17 @@ func (s *GostSuite) TestSanitization(c *C) {
 	})
 }
 
+func (s *GostSuite) TestForwardedKeyParsing(c *C) {
+	forwardingEnabled = true
+	sendGostMessages(c, "f|foo:1|c", "f|f|bar:1|c", "f||baz:1|c", "quf|ux:1|c")
+	checkAllApprox(c, []testCase{
+		{"foo.count", 1.0},
+		{"f|bar.count", 1.0},
+		{"|baz.count", 1.0},
+		{"quf|ux.count", 1.0},
+	})
+}
+
 func (s *GostSuite) TestSampleRates(c *C) {
 	sendGostMessages(c, "a:1|c|@0.1", "b:1|c|@1.0", "c:1|c|@3.0", "d:1|c|@0.0", "e:1|c|@-0.5")
 	msg := rec.waitForMessage()
