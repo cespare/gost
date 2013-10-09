@@ -34,32 +34,22 @@ func metaCount(name string) {
 	incoming <- s
 }
 
-// metaGauge sets a gauge for an internal gost stat.
-func metaGauge(name string, value float64) {
-	s := &Stat{
-		Type:  StatGauge,
-		Name:  "gost." + name,
-		Value: value,
-	}
-	incoming <- s
-}
-
 func isSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\r' || c == '\n'
 }
 
 // parseKey does key sanitization (see Key Format in the readme) and stops on ':', which indicates the end of
 // the key. key is the sanitized key part (before the ':'), ok indicates whether this function successfully
-// found a ':' to split on, forwarded indicates whether this key is to be forwarded (forwarded keys start with
+// found a ':' to split on, forward indicates whether this key is to be forwarded (forwarded keys start with
 // forwardKeyPrefix and that prefix is stripped from key), and rest is the remainder of the input after the
 // ':'.
-func parseKey(b []byte) (key string, ok bool, forwarded bool, rest []byte) {
+func parseKey(b []byte) (key string, ok bool, forward bool, rest []byte) {
 	var buf bytes.Buffer
-	forwarded = forwardingEnabled
+	forward = forwardingEnabled
 	for i, c := range b {
-		if forwarded && i < len(forwardKeyPrefix) {
-			forwarded = (c == forwardKeyPrefix[i])
-			if forwarded && i == len(forwardKeyPrefix)-1 {
+		if forward && i < len(forwardKeyPrefix) {
+			forward = (c == forwardKeyPrefix[i])
+			if forward && i == len(forwardKeyPrefix)-1 {
 				// We're forwarding this key; strip the prefix
 				buf.Reset()
 				continue
@@ -76,7 +66,7 @@ func parseKey(b []byte) (key string, ok bool, forwarded bool, rest []byte) {
 		case '<', '>', '*', '[', ']', '{', '}': // Remove <, >, *, [, ], {, and }
 			continue
 		case ':': // End of key
-			return buf.String(), true, forwarded, b[i+1:]
+			return buf.String(), true, forward, b[i+1:]
 		}
 		buf.WriteByte(c)
 	}
@@ -147,11 +137,11 @@ func parseRate(b []byte) (float64, bool) {
 
 func parseStatsdMessage(msg []byte) (stat *Stat, ok bool) {
 	stat = &Stat{}
-	name, ok, forwarded, rest := parseKey(msg)
+	name, ok, forward, rest := parseKey(msg)
 	if !ok || name == "" { // empty name is invalid
 		return nil, false
 	}
-	stat.Forwarded = forwarded
+	stat.Forward = forward
 	stat.Name = name
 
 	// NOTE: It looks like statsd will accept multiple values for a key at once (e.g., foo.bar:1|c:2.5|g), but
@@ -186,30 +176,4 @@ func parseStatsdMessage(msg []byte) (stat *Stat, ok bool) {
 	}
 	stat.SampleRate = rate
 	return stat, true
-}
-
-type BufferedCounts map[string]map[string]float64
-
-func NewBufferedCounts() BufferedCounts {
-	return make(BufferedCounts)
-}
-
-func (c BufferedCounts) Get(key string) map[string]float64 { return c[key] }
-
-func (c BufferedCounts) Set(key1, key2 string, value float64) {
-	s, ok := c[key1]
-	if ok {
-		s[key2] = value
-	} else {
-		c[key1] = map[string]float64{key2: value}
-	}
-}
-
-func (c BufferedCounts) Inc(key1, key2 string, delta float64) {
-	s, ok := c[key1]
-	if ok {
-		s[key2] += delta
-	} else {
-		c[key1] = map[string]float64{key2: delta}
-	}
 }

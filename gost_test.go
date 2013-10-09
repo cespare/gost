@@ -25,29 +25,39 @@ var _ = Suite(&GostSuite{})
 // ----------- Setup ----------------
 
 var (
-	rec         = &recorder{}
-	testUDPConn *net.UDPConn
-	when        = time.Time{}
-	flushChan   = make(chan time.Time)
+	rec                          = &recorder{}
+	testUDPConn                  *net.UDPConn
+	testForwardListener          net.Listener
+	when                         = time.Time{}
+	aggregateFlushChan           = make(chan time.Time)
+	aggregateForwardedFlushChan  = make(chan time.Time)
+	aggregateForwardingFlushChan = make(chan time.Time)
+	flushers                     int
 )
 
 func (s *GostSuite) SetUpSuite(c *C) {
+	// Stub out control functions
 	now = func() time.Time { return when }
-	flushTicker = func() <-chan time.Time { return flushChan }
+	aggregateFlushTicker = func() <-chan time.Time { return aggregateFlushChan }
+	aggregateForwardedFlushTicker = func() <-chan time.Time { return aggregateForwardedFlushChan }
+	aggregateForwardingFlushTicker = func() <-chan time.Time { return aggregateForwardingFlushChan }
+
+	// Start workers
 	go flush()
 	go aggregate()
 	// Don't want to see bad output lines (we could capture and inspect these if we want to test them later).
 	log.SetOutput(ioutil.Discard)
-}
 
-func (s *GostSuite) SetUpTest(c *C) {
-	rec.Start()
-	conf = &Conf{
-		GraphiteAddr:             rec.Addr,
-		ClearStatsBetweenFlushes: true,
-		FlushIntervalMS:          2000, // Fake
+	var err error
+	testForwardListener, err = net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		c.Fatal(err)
 	}
-	namespace = "com.example"
+	forwardingIncoming = make(chan *Stat, incomingQueueSize)
+	go flushForwarding()
+	go aggregateForwarding()
+	go aggregateForwarded()
+	go forwardServer(testForwardListener)
 
 	// Bind to any port
 	if err := debugServer.Start(0); err != nil {
@@ -65,8 +75,24 @@ func (s *GostSuite) SetUpTest(c *C) {
 	go clientServer(testUDPConn)
 }
 
-func (s *GostSuite) TearDownTest(c *C) {
+func (s *GostSuite) TearDownSuite(c *C) {
 	testUDPConn.Close()
+	testForwardListener.Close()
+}
+
+func (s *GostSuite) SetUpTest(c *C) {
+	rec.Start()
+	conf = &Conf{
+		GraphiteAddr:             rec.Addr,
+		ForwardingAddr:           testForwardListener.Addr().String(),
+		ForwardedNamespace:       "global",
+		ClearStatsBetweenFlushes: true,
+		FlushIntervalMS:          2000, // Fake
+		Namespace:                "com.example",
+	}
+}
+
+func (s *GostSuite) TearDownTest(c *C) {
 	rec.Close()
 }
 
@@ -103,21 +129,15 @@ type recorder struct {
 	W        *sync.WaitGroup
 	Addr     string
 	Listener net.Listener
-	Messages chan *graphiteMessage
+	messages chan []byte
 }
 
-// waitForMessage spams flush until a message comes out. It's pretty hacky. It only works when clearing is
-// turned off; otherwise you'll get lots of messages (not just the ones you intended).
+// waitForMessage flushes the aggregator and returns the collected messages.
 func (r *recorder) waitForMessage() *graphiteMessage {
-	ticker := time.NewTicker(time.Millisecond)
-	for {
-		select {
-		case <-ticker.C:
-			flushChan <- when
-		case msg := <-r.Messages:
-			return msg
-		}
-	}
+	// Ensure the aggregator has time to collect all the messages we've sent in.
+	time.Sleep(time.Millisecond)
+	aggregateFlushChan <- when
+	return parseRawGraphiteMessage(<-r.messages)
 }
 
 func (r *recorder) Start() {
@@ -129,7 +149,7 @@ func (r *recorder) Start() {
 	}
 	r.Listener = listener
 	r.Addr = listener.Addr().String()
-	r.Messages = make(chan *graphiteMessage)
+	r.messages = make(chan []byte)
 	go func() {
 		for {
 			c, err := r.Listener.Accept()
@@ -148,7 +168,7 @@ func (r *recorder) Handle(c net.Conn) {
 	if err != nil {
 		return
 	}
-	r.Messages <- parseRawGraphiteMessage(msg)
+	r.messages <- msg
 }
 
 func (r *recorder) Close() {
@@ -226,7 +246,7 @@ func (s *GostSuite) TestCounters(c *C) {
 }
 
 func (s *GostSuite) TestTimers(c *C) {
-	sendGostMessages(c, "foobar:100|ms", "foobar:100|ms", "foobar:400|ms", "baz:500|ms|@0.2")
+	sendGostMessages(c, "foobar:100|ms", "foobar:100|ms", "foobar:400|ms", "baz:500|ms")
 	checkAllApprox(c, []testCase{
 		{"foobar.timer.count", 3.0},
 		{"foobar.timer.rate", 1.5},
@@ -236,8 +256,8 @@ func (s *GostSuite) TestTimers(c *C) {
 		{"foobar.timer.mean", 200.0},
 		{"foobar.timer.stdev", math.Sqrt((2*100.0*100.0 + 200.0*200.0) / 3)},
 
-		{"baz.timer.count", 5.0},
-		{"baz.timer.rate", 2.5},
+		{"baz.timer.count", 1.0},
+		{"baz.timer.rate", 0.5},
 		{"baz.timer.min", 500.0},
 		{"baz.timer.max", 500.0},
 		{"baz.timer.median", 500.0},
@@ -268,18 +288,12 @@ func (s *GostSuite) TestSets(c *C) {
 }
 
 func (s *GostSuite) TestMetaStats(c *C) {
-	// Make sure that at least one stat has been processed, so that distinct_metrics_flushed is present
-	sendGostMessages(c, "before:1|c")
-	rec.waitForMessage()
-
 	sendGostMessages(c, "foobar:2|c", "foobar:3|g", "foobar:asdf|s")
 	sendGostMessages(c, "baz:300|g")
 	sendGostMessages(c, "baz:300|asdfasdf")
 	checkAllApprox(c, []testCase{
 		{"gost.bad_messages_seen.count", 2.0},
 		{"gost.packets_received.count", 5.0},
-	})
-	checkAllApprox(c, []testCase{
 		// foobar/count (2), foobar/gauge (1), baz/gauge (1), gost.packets_received/count (2),
 		// gost.bad_messages_seen/count (2), gost.distinct_metrics_flushed/gauge (1)
 		// total = 9
@@ -302,21 +316,18 @@ func (s *GostSuite) TestWithStatClearing(c *C) {
 	c.Check(msg.Parsed["com.example.foobar.count"].Value, approx, 2.0)
 }
 
-// TODO: this test is timing-sensitive and I've hacked around that with sleeps. Fix this.
 func (s *GostSuite) TestWithoutStatClearing(c *C) {
 	conf.ClearStatsBetweenFlushes = false
-	sendGostMessages(c, "a:1|c")
-	sendGostMessages(c, "b:2|ms")
-	sendGostMessages(c, "c:3|g")
-	sendGostMessages(c, "d:4|s")
+	sendGostMessages(c, "a:1|c", "b:2|ms", "c:3|g", "d:4|s")
 	time.Sleep(time.Millisecond)
-	flushChan <- when
-	<-rec.Messages
+	aggregateFlushChan <- when
+	<-rec.messages
 	sendGostMessages(c, "foobar:2|c")
 	time.Sleep(time.Millisecond)
-	flushChan <- when
-	msg := <-rec.Messages
+	aggregateFlushChan <- when
+	msg := parseRawGraphiteMessage(<-rec.messages)
 	c.Check(msg.Parsed["com.example.a.count"].Value, approx, 0.0)
+	c.Check(msg.Parsed["com.example.a.rate"].Value, approx, 0.0)
 	c.Check(msg.Parsed["com.example.b.timer.count"], IsNil)
 	c.Check(msg.Parsed["com.example.c.gauge"].Value, approx, 3.0)
 	c.Check(msg.Parsed["com.example.d.set"].Value, approx, 0.0)
@@ -359,11 +370,17 @@ func (s *GostSuite) TestForwardedKeyParsing(c *C) {
 	forwardingEnabled = true
 	sendGostMessages(c, "f|foo:1|c", "f|f|bar:1|c", "f||baz:1|c", "quf|ux:1|c")
 	checkAllApprox(c, []testCase{
-		{"foo.count", 1.0},
-		{"f|bar.count", 1.0},
-		{"|baz.count", 1.0},
 		{"quf|ux.count", 1.0},
 	})
+
+	// Push the forwarded messages through
+	aggregateForwardingFlushChan <- when
+	time.Sleep(time.Millisecond)
+	aggregateForwardedFlushChan <- when
+	msg := parseRawGraphiteMessage(<-rec.messages)
+	c.Check(msg.Parsed["global.foo.count"].Value, approx, 1.0)
+	c.Check(msg.Parsed["global.f|bar.count"].Value, approx, 1.0)
+	c.Check(msg.Parsed["global.|baz.count"].Value, approx, 1.0)
 }
 
 func (s *GostSuite) TestSampleRates(c *C) {

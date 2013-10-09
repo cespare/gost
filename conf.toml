@@ -7,6 +7,9 @@ forwarding_addr = "localhost:8124"
 # Bind address to listen on for forwarded messages -- if this is set, gost is configured as a forwarder
 forwarder_listen_addr = ":8124"
 
+# Namespace for forwarded stats. This variable must be set if forwarder_listen_addr is set.
+forwarded_namespace = "example.global"
+
 # Port to listen (on localhost) for statsd messages from clients over UDP
 port = 8125
 

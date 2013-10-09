@@ -2,13 +2,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/gob"
 	"flag"
 	"fmt"
+	"io"
 	"log"
-	"math"
 	"net"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 )
@@ -29,25 +28,29 @@ var (
 
 	bufPool = make(chan []byte, nUDPBufs) // pool of buffers for incoming messagse
 
-	namespace string                                // determined from conf.Namespace
-	incoming  = make(chan *Stat, incomingQueueSize) // incoming stats are passed to the aggregator
-	outgoing  = make(chan []byte)                   // outgoing Graphite messages
+	incoming = make(chan *Stat, incomingQueueSize) // incoming stats are passed to the aggregator
+	outgoing = make(chan []byte)                   // outgoing Graphite messages
 
-	stats = NewBufferedCounts() // e.g. counters -> { foo.bar -> 2 }
-	// sets and timers require additional structures for intermediate computations.
-	setValues   = make(map[string]map[float64]struct{})
-	timerValues = make(map[string][]float64)
+	stats = NewBufferedCounts()
 
-	forwardingEnabled bool                  // Whether configured to forward to another gost
-	forwarderEnabled  bool                  // Whether configured to receive forwarded messages
-	forwardStats      = NewBufferedCounts() // Forwarded counters and gauges
-	forwardKeyPrefix  = []byte("f|")
+	forwardingEnabled  bool                  // Whether configured to forward to another gost
+	forwardingStats    = NewBufferedCounts() // Counters to be forwarded
+	forwardKeyPrefix   = []byte("f|")
+	forwardingIncoming chan *Stat          // incoming messages to be forwarded
+	forwardingOutgoing = make(chan []byte) // outgoing forwarded messages
+
+	// Whether configured to receive forwarded messages
+	forwarderEnabled  bool
+	forwarderIncoming = make(chan *BufferedCounts, incomingQueueSize) // incoming forwarded messages
+	forwardedStats    = NewBufferedCounts()
 
 	debugServer = &dServer{}
 
-	// flushTicker and now are functions that the tests can stub out.
-	flushTicker func() <-chan time.Time
-	now         func() time.Time = time.Now
+	// The flushTickers and now are functions that the tests can stub out.
+	aggregateFlushTicker           func() <-chan time.Time
+	aggregateForwardedFlushTicker  func() <-chan time.Time
+	aggregateForwardingFlushTicker func() <-chan time.Time
+	now                            func() time.Time = time.Now
 )
 
 func init() {
@@ -68,7 +71,7 @@ const (
 
 type Stat struct {
 	Type       StatType
-	Forwarded  bool
+	Forward    bool
 	Name       string
 	Value      float64
 	SampleRate float64
@@ -111,6 +114,7 @@ type Conf struct {
 	GraphiteAddr             string       `toml:"graphite_addr"`
 	ForwardingAddr           string       `toml:"forwarding_addr"`
 	ForwarderListenAddr      string       `toml:"forwarder_listen_addr"`
+	ForwardedNamespace       string       `toml:"forwarded_namespace"`
 	Port                     int          `toml:"port"`
 	DebugPort                int          `toml:"debug_port"`
 	DebugLogging             bool         `toml:"debug_logging"`
@@ -132,7 +136,15 @@ func handleMessages(buf []byte) {
 			metaCount("bad_messages_seen")
 			continue
 		}
-		incoming <- stat
+		if stat.Forward {
+			if stat.Type != StatCounter {
+				metaCount("bad_metric_type_for_forwarding")
+				continue
+			}
+			forwardingIncoming <- stat
+		} else {
+			incoming <- stat
+		}
 	}
 	bufPool <- buf[:cap(buf)] // Reset buf's length and return to the pool
 }
@@ -154,142 +166,119 @@ func clientServer(c *net.UDPConn) error {
 	}
 }
 
-// clearStats resets the state of all the stat types.
-func clearStats() {
-	// There aren't great semantics for persisting timer values, so we clear them regardless.
-	timerValues = make(map[string][]float64)
-
-	if conf.ClearStatsBetweenFlushes {
-		for name := range stats {
-			delete(stats, name)
-		}
-		setValues = make(map[string]map[float64]struct{})
-	} else {
-		for name, s := range stats {
-			if strings.HasPrefix(name, "timer.") {
-				delete(stats, name)
-			} else if name != "gauge" {
-				for k := range s {
-					s[k] = 0
-				}
-			}
-		}
-		for k := range setValues {
-			setValues[k] = make(map[float64]struct{})
-		}
-	}
-
-	if forwardingEnabled {
-		// Always delete forwarded stats -- they are cleared/preserved between flushes at the receiving end.
-		for name := range forwardStats {
-			delete(forwardStats, name)
+// aggregateForwarded merges forwarded gost messages.
+func aggregateForwarded() {
+	ticker := aggregateForwardedFlushTicker()
+	for {
+		select {
+		case count := <-forwarderIncoming:
+			forwardedStats.Merge(count)
+		case <-ticker:
+			n, msg := forwardedStats.CreateGraphiteMessage(conf.ForwardedNamespace,
+				"distinct_forwarded_metrics_flushed")
+			dbg.Printf("Sending %d forwarded stat(s) to graphite.", n)
+			outgoing <- msg
+			forwardedStats.Clear(!conf.ClearStatsBetweenFlushes)
 		}
 	}
 }
 
-// postProcessStats computes derived stats prior to flushing.
-func postProcessStats() {
-	// Compute the per-second rate for each counter
-	rateFactor := float64(conf.FlushIntervalMS) / 1000
-	for key, value := range stats.Get("count") {
-		stats.Set("rate", key, value/rateFactor)
+func handleForwarded(c net.Conn) {
+	decoder := gob.NewDecoder(c)
+	for {
+		var counts map[string]float64
+		if err := decoder.Decode(&counts); err != nil {
+			if err == io.EOF {
+				return
+			}
+			log.Println("Error reading forwarded message:", err)
+			metaCount("error_reading_forwarded_message")
+			return
+		}
+		forwarderIncoming <- &BufferedCounts{Counts: counts}
 	}
-	// Compute the size of each set
-	for key, value := range setValues {
-		stats.Set("set", key, float64(len(value)))
-	}
+}
 
-	// Process all the various stats for each timer
-	for key, values := range timerValues {
-		if len(values) == 0 {
+func forwardServer(listener net.Listener) error {
+	for {
+		c, err := listener.Accept()
+		if err != nil {
+			if e, ok := err.(net.Error); ok && e.Temporary() {
+				delay := 10 * time.Millisecond
+				log.Printf("Accept error: %v; retrying in %v", e, delay)
+				time.Sleep(delay)
+				continue
+			}
+			return err
+		}
+		go handleForwarded(c)
+	}
+}
+
+// aggregateForwarding reads incoming forward messages and aggregates them. Every flush interval it forwards
+// the collected stats.
+func aggregateForwarding() {
+	ticker := aggregateForwardingFlushTicker()
+	for {
+		select {
+		case stat := <-forwardingIncoming:
+			if stat.Type == StatCounter {
+				forwardingStats.AddCount(stat.Name, stat.Value/stat.SampleRate)
+			}
+		case <-ticker:
+			n, msg := forwardingStats.CreateForwardMessage()
+			if n > 0 {
+				dbg.Printf("Forwarding %d stat(s).", n)
+				forwardingOutgoing <- msg
+			} else {
+				dbg.Println("No stats to forward.")
+			}
+			// Always delete forwarded stats -- they are cleared/preserved between flushes at the receiving end.
+			forwardingStats.Clear(false)
+		}
+	}
+}
+
+// flushForwarding pushes forwarding messages to another gost instance.
+func flushForwarding() {
+	for msg := range forwardingOutgoing {
+		debugMsg := fmt.Sprintf("<binary forwarding message; len = %d bytes>", len(msg))
+		debugServer.Print("[forward]", []byte(debugMsg))
+		conn, err := net.Dial("tcp", conf.ForwardingAddr)
+		if err != nil {
+			log.Printf("Error: cannot connect to forwarding gost at %s: %s", conf.ForwardingAddr, err)
 			continue
 		}
-		timerStats := make(map[string]float64)
-		count := float64(len(values))
-		// rate is the rate (per second) at which timings were recorded (scaled for the sampling rate).
-		timerStats["rate"] = stats.Get("timer.count")[key] / rateFactor
-		// sum is the total sum of all timings. You can use count and sum to compute statistics across buckets.
-		sum := 0.0
-		for _, t := range values {
-			sum += t
+		if _, err := conn.Write(msg); err != nil {
+			log.Println("Warning: could not write forwarding message.")
 		}
-		timerStats["sum"] = sum
-		mean := sum / count
-		timerStats["mean"] = mean
-		sumSquares := 0.0
-		for _, v := range values {
-			d := v - mean
-			sumSquares += d * d
-		}
-		timerStats["stdev"] = math.Sqrt(sumSquares / count)
-		sort.Float64s(values)
-		timerStats["min"] = values[0]
-		timerStats["max"] = values[len(values)-1]
-		if len(values)%2 == 0 {
-			timerStats["median"] = float64(values[len(values)/2-1]+values[len(values)/2]) / 2
-		} else {
-			timerStats["median"] = float64(values[len(values)/2])
-		}
-		// Now write out all these stats as namespaced keys
-		for statName, value := range timerStats {
-			k := "timer." + statName
-			stats.Set(k, key, value)
-		}
+		conn.Close()
 	}
-}
-
-// createGraphiteMessage buffers up a graphite message. We could write directly to the connection and avoid
-// the extra buffering but this allows us to use separate goroutines to write to graphite (potentially slow)
-// and aggregate (happening all the time).
-func createGraphiteMessage() (n int, msg []byte) {
-	buf := &bytes.Buffer{}
-	timestamp := now().Unix()
-	for typ, s := range stats {
-		for key, value := range s {
-			n++
-			fullKey := namespace + "." + key + "." + typ
-			fmt.Fprintf(buf, "%s %f %d\n", fullKey, value, timestamp)
-		}
-	}
-	return n, buf.Bytes()
 }
 
 // aggregate reads the incoming messages and aggregates them. It sends them to be flushed every flush
 // interval.
 func aggregate() {
-	ticker := flushTicker()
+	ticker := aggregateFlushTicker()
 	for {
 		select {
 		case stat := <-incoming:
 			key := stat.Name
 			switch stat.Type {
 			case StatCounter:
-				stats.Inc("count", key, stat.Value/stat.SampleRate)
+				stats.AddCount(key, stat.Value/stat.SampleRate)
 			case StatSet:
-				set, ok := setValues[key]
-				if ok {
-					set[stat.Value] = struct{}{}
-				} else {
-					setValues[key] = map[float64]struct{}{stat.Value: {}}
-				}
+				stats.AddSetItem(key, stat.Value)
 			case StatGauge:
-				stats.Set("gauge", key, stat.Value)
+				stats.SetGauge(key, stat.Value)
 			case StatTimer:
-				stats.Inc("timer.count", key, 1.0/stat.SampleRate)
-				timerValues[key] = append(timerValues[key], stat.Value)
+				stats.RecordTimer(key, stat.Value)
 			}
 		case <-ticker:
-			postProcessStats()
-			n, msg := createGraphiteMessage()
-			if n > 0 {
-				dbg.Printf("Flushing %d stats.\n", n)
-				outgoing <- msg
-			} else {
-				dbg.Println("No stats to flush.")
-			}
-			clearStats()
-			// In its own goroutine to avoid deadlock. If the incoming queue is full, this will hang.
-			go metaGauge("distinct_metrics_flushed", float64(n))
+			n, msg := stats.CreateGraphiteMessage(conf.Namespace, "distinct_metrics_flushed")
+			dbg.Printf("Flushing %d stat(s).", n)
+			outgoing <- msg
+			stats.Clear(!conf.ClearStatsBetweenFlushes)
 		}
 	}
 }
@@ -300,7 +289,7 @@ func flush() {
 		debugServer.Print("[out] ", msg)
 		conn, err := net.Dial("tcp", conf.GraphiteAddr)
 		if err != nil {
-			log.Printf("Error: cannot connect to graphite at %s: %s\n", conf.GraphiteAddr, err)
+			log.Printf("Error: cannot connect to graphite at %s: %s", conf.GraphiteAddr, err)
 			continue
 		}
 		if _, err := conn.Write(msg); err != nil {
@@ -380,15 +369,35 @@ func (s *dServer) Print(tag string, msg []byte) {
 func main() {
 	flag.Parse()
 	parseConf()
-	flushTicker = func() <-chan time.Time {
+	aggregateFlushTicker = func() <-chan time.Time {
 		return time.NewTicker(time.Duration(conf.FlushIntervalMS) * time.Millisecond).C
 	}
+	aggregateForwardedFlushTicker = aggregateFlushTicker
+	aggregateForwardingFlushTicker = aggregateFlushTicker
 
-	clearStats()
 	go flush()
 	go aggregate()
 	if conf.OsStats != nil {
 		go checkOsStats()
+	}
+
+	if forwardingEnabled {
+		// Having forwardingIncoming be nil when forwarding is not enabled ensures that gost will crash fast if
+		// somehow messages are interpreted as forwarded messages even when forwarding is turned off (which should
+		// never happen). Otherwise the behavior would be to fill up the queue and then deadlock.
+		forwardingIncoming = make(chan *Stat, incomingQueueSize)
+		go flushForwarding()
+		go aggregateForwarding()
+	}
+
+	if forwarderEnabled {
+		log.Println("Listening for forwarded gost messages on", conf.ForwarderListenAddr)
+		listener, err := net.Listen("tcp", conf.ForwarderListenAddr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		go aggregateForwarded()
+		go func() { log.Fatal(forwardServer(listener)) }()
 	}
 
 	if err := debugServer.Start(conf.DebugPort); err != nil {
@@ -405,8 +414,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	go log.Fatal(clientServer(conn))
-
-	t := time.NewTimer(15 * time.Second)
-	<-t.C
+	log.Fatal(clientServer(conn))
 }

@@ -42,6 +42,17 @@ func parseConf() {
 		log.Fatal("flush_interval_ms must be positive")
 	}
 
+	if meta.IsDefined("forwarding_addr") {
+		forwardingEnabled = true
+	}
+
+	if meta.IsDefined("forwarder_listen_addr") {
+		forwarderEnabled = true
+		if !meta.IsDefined("forwarded_namespace") {
+			log.Fatal("forwarded_namespace is required if gost is configured as a forwarder")
+		}
+	}
+
 	osStats := conf.OsStats
 	if osStats != nil {
 		if meta.IsDefined("os_stats", "check_interval_ms") {
@@ -77,7 +88,6 @@ func parseConf() {
 		}
 	}
 
-	namespace = filterNamespace(conf.Namespace)
-	forwardingEnabled = conf.ForwardingAddr != ""
-	forwarderEnabled = conf.ForwarderListenAddr != ""
+	conf.Namespace = filterNamespace(conf.Namespace)
+	conf.ForwardedNamespace = filterNamespace(conf.ForwardedNamespace)
 }
