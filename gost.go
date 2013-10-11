@@ -31,18 +31,18 @@ var (
 	incoming = make(chan *Stat, incomingQueueSize) // incoming stats are passed to the aggregator
 	outgoing = make(chan []byte)                   // outgoing Graphite messages
 
-	stats = NewBufferedCounts()
+	stats = NewBufferedStats()
 
-	forwardingEnabled  bool                  // Whether configured to forward to another gost
-	forwardingStats    = NewBufferedCounts() // Counters to be forwarded
+	forwardingEnabled  bool                 // Whether configured to forward to another gost
+	forwardingStats    = NewBufferedStats() // Counters to be forwarded
 	forwardKeyPrefix   = []byte("f|")
 	forwardingIncoming chan *Stat          // incoming messages to be forwarded
 	forwardingOutgoing = make(chan []byte) // outgoing forwarded messages
 
 	// Whether configured to receive forwarded messages
 	forwarderEnabled  bool
-	forwarderIncoming = make(chan *BufferedCounts, incomingQueueSize) // incoming forwarded messages
-	forwardedStats    = NewBufferedCounts()
+	forwarderIncoming = make(chan *BufferedStats, incomingQueueSize) // incoming forwarded messages
+	forwardedStats    = NewBufferedStats()
 
 	debugServer = &dServer{}
 
@@ -195,7 +195,7 @@ func handleForwarded(c net.Conn) {
 			metaCount("error_reading_forwarded_message")
 			return
 		}
-		forwarderIncoming <- &BufferedCounts{Counts: counts}
+		forwarderIncoming <- &BufferedStats{Counts: counts}
 	}
 }
 

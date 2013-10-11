@@ -9,7 +9,7 @@ import (
 	"sort"
 )
 
-type BufferedCounts struct {
+type BufferedStats struct {
 	Counts map[string]float64
 	Gauges map[string]float64
 	Sets   map[string]map[float64]struct{}
@@ -20,23 +20,24 @@ type BufferedCounts struct {
 	PersistentKeys map[string]map[string]struct{}
 }
 
-func NewBufferedCounts() *BufferedCounts {
-	return &BufferedCounts{
+func NewBufferedStats() *BufferedStats {
+	return &BufferedStats{
 		Counts: make(map[string]float64),
 		Gauges: make(map[string]float64),
 		Sets:   make(map[string]map[float64]struct{}),
 		Timers: make(map[string][]float64),
 		PersistentKeys: map[string]map[string]struct{}{
 			"count": make(map[string]struct{}),
+			"rate":  make(map[string]struct{}),
 			"set":   make(map[string]struct{}),
 		},
 	}
 }
 
-func (c *BufferedCounts) AddCount(key string, delta float64) { c.Counts[key] += delta }
-func (c *BufferedCounts) SetGauge(key string, value float64) { c.Gauges[key] = value }
+func (c *BufferedStats) AddCount(key string, delta float64) { c.Counts[key] += delta }
+func (c *BufferedStats) SetGauge(key string, value float64) { c.Gauges[key] = value }
 
-func (c *BufferedCounts) AddSetItem(key string, item float64) {
+func (c *BufferedStats) AddSetItem(key string, item float64) {
 	set, ok := c.Sets[key]
 	if ok {
 		set[item] = struct{}{}
@@ -45,13 +46,13 @@ func (c *BufferedCounts) AddSetItem(key string, item float64) {
 	}
 }
 
-func (c *BufferedCounts) RecordTimer(key string, value float64) {
+func (c *BufferedStats) RecordTimer(key string, value float64) {
 	c.Timers[key] = append(c.Timers[key], value)
 }
 
-// Merge merges in another BufferedCounts. Right now it only adds in Counts (because only counts can be
+// Merge merges in another BufferedStats. Right now it only adds in Counts (because only counts can be
 // forwarded).
-func (c *BufferedCounts) Merge(c2 *BufferedCounts) {
+func (c *BufferedStats) Merge(c2 *BufferedStats) {
 	for name, value := range c2.Counts {
 		c.AddCount(name, value)
 	}
@@ -59,7 +60,7 @@ func (c *BufferedCounts) Merge(c2 *BufferedCounts) {
 
 // computeDerived post-processes the stats to add in the derived metrics and returns map of all the key-value
 // stats grouped by type.
-func (c *BufferedCounts) computeDerived() map[string]map[string]float64 {
+func (c *BufferedStats) computeDerived() map[string]map[string]float64 {
 	result := map[string]map[string]float64{
 		// Put in the stats we've already got
 		"count": c.Counts,
@@ -134,7 +135,7 @@ func (c *BufferedCounts) computeDerived() map[string]map[string]float64 {
 // CreateForwardMessage buffers up stats for forwarding to another gost instance. Right now it only serializes
 // the counts, because they are all that may be forwarded.
 // TODO: We could switch to a simple binary wire format to avoid reflection if gob ends up being a bottleneck.
-func (c *BufferedCounts) CreateForwardMessage() (n int, msg []byte) {
+func (c *BufferedStats) CreateForwardMessage() (n int, msg []byte) {
 	buf := &bytes.Buffer{}
 	encoder := gob.NewEncoder(buf)
 	if err := encoder.Encode(c.Counts); err != nil {
@@ -150,7 +151,7 @@ func (c *BufferedCounts) CreateForwardMessage() (n int, msg []byte) {
 // ready to send.
 // NOTE: We could write directly to the connection and avoid the extra buffering but this allows us to use
 // separate goroutines to write to graphite (potentially slow) and aggregate (happening all the time).
-func (c *BufferedCounts) CreateGraphiteMessage(namespace, countGaugeName string) (n int, msg []byte) {
+func (c *BufferedStats) CreateGraphiteMessage(namespace, countGaugeName string) (n int, msg []byte) {
 	metrics := c.computeDerived()
 	buf := &bytes.Buffer{}
 	timestamp := now().Unix()
@@ -169,10 +170,11 @@ func (c *BufferedCounts) CreateGraphiteMessage(namespace, countGaugeName string)
 // - Counters and sets are deleted, but their names are recorded if persistStats = true.
 // - Timers are always cleared because there aren't great semantics for persisting them.
 // - Gauges are preserved as-is unless persistStats = false so they keep their current values.
-func (c *BufferedCounts) Clear(persistStats bool) {
+func (c *BufferedStats) Clear(persistStats bool) {
 	if persistStats {
 		for k := range c.Counts {
 			c.PersistentKeys["count"][k] = struct{}{}
+			c.PersistentKeys["rate"][k] = struct{}{}
 		}
 		for k := range c.Sets {
 			c.PersistentKeys["set"][k] = struct{}{}
