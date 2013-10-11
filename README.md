@@ -29,9 +29,9 @@ section below for details). **values** are human-printed floats:
 
     /^[+\-]?\d+(\.\d+)?$/
 
-Counters and timers have a sampling rate, which is the same format as a value. This tells gost that the
-metric is being sampled at some rate, and gost applies the appropriate transformation to obtain an estimate of
-the true value.
+Counters have a sampling rate, which is the same format as a value. This tells gost that the counter is being
+sampled at some rate, and gost multiplies the counter value by the reciprocal of the sampling rate to obtain
+an estimate of the true value.
 
 **Counters**
 
@@ -54,7 +54,7 @@ Examples:
 Timers are for measuring the elapsed time of some operation. These are more complex than the other kinds of
 stats. For each timer key, gost records the following metrics during each flush period:
 
-* `timer.count`: the number of timer calls that have been recorded (scaled for the sample rate)
+* `timer.count`: the number of timer calls that have been recorded
 * `timer.rate`: the rate at which timer calls came in, per second
 * `timer.min`, `timer.max`: the min and max values of the timer during the flush interval
 * `timer.mean`, `timer.median`, `timer.stdev`: the mean, median, and standard deviation, respectively, of

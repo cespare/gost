@@ -74,7 +74,7 @@ type Stat struct {
 	Forward    bool
 	Name       string
 	Value      float64
-	SampleRate float64
+	SampleRate float64 // Only for counts
 }
 
 // tagToStatType maps a tag (e.g., []byte("c")) to a StatType (e.g., StatCounter).
