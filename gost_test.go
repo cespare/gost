@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math"
 	"net"
 	"strings"
 	"sync"
@@ -252,17 +251,7 @@ func (*GostSuite) TestTimers(c *C) {
 		{"foobar.timer.rate", 1.5},
 		{"foobar.timer.min", 100.0},
 		{"foobar.timer.max", 400.0},
-		{"foobar.timer.median", 100.0},
-		{"foobar.timer.mean", 200.0},
-		{"foobar.timer.stdev", math.Sqrt((2*100.0*100.0 + 200.0*200.0) / 3)},
-
 		{"baz.timer.count", 1.0},
-		{"baz.timer.rate", 0.5},
-		{"baz.timer.min", 500.0},
-		{"baz.timer.max", 500.0},
-		{"baz.timer.median", 500.0},
-		{"baz.timer.mean", 500.0},
-		{"baz.timer.stdev", 0.0},
 	})
 }
 
