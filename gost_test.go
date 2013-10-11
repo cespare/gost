@@ -35,7 +35,7 @@ var (
 	flushers                     int
 )
 
-func (s *GostSuite) SetUpSuite(c *C) {
+func (*GostSuite) SetUpSuite(c *C) {
 	// Stub out control functions
 	now = func() time.Time { return when }
 	aggregateFlushTicker = func() <-chan time.Time { return aggregateFlushChan }
@@ -75,12 +75,12 @@ func (s *GostSuite) SetUpSuite(c *C) {
 	go clientServer(testUDPConn)
 }
 
-func (s *GostSuite) TearDownSuite(c *C) {
+func (*GostSuite) TearDownSuite(c *C) {
 	testUDPConn.Close()
 	testForwardListener.Close()
 }
 
-func (s *GostSuite) SetUpTest(c *C) {
+func (*GostSuite) SetUpTest(c *C) {
 	rec.Start()
 	conf = &Conf{
 		GraphiteAddr:             rec.Addr,
@@ -92,7 +92,7 @@ func (s *GostSuite) SetUpTest(c *C) {
 	}
 }
 
-func (s *GostSuite) TearDownTest(c *C) {
+func (*GostSuite) TearDownTest(c *C) {
 	rec.Close()
 }
 
@@ -235,7 +235,7 @@ func checkAllApprox(c *C, tests []testCase) {
 
 // ----------- Tests ----------------
 
-func (s *GostSuite) TestCounters(c *C) {
+func (*GostSuite) TestCounters(c *C) {
 	sendGostMessages(c, "foobar:3|c", "foobar:5|c", "baz:2|c|@0.1", "baz:4|c|@0.1")
 	checkAllApprox(c, []testCase{
 		{"foobar.count", 8.0},
@@ -245,7 +245,7 @@ func (s *GostSuite) TestCounters(c *C) {
 	})
 }
 
-func (s *GostSuite) TestTimers(c *C) {
+func (*GostSuite) TestTimers(c *C) {
 	sendGostMessages(c, "foobar:100|ms", "foobar:100|ms", "foobar:400|ms", "baz:500|ms")
 	checkAllApprox(c, []testCase{
 		{"foobar.timer.count", 3.0},
@@ -266,7 +266,7 @@ func (s *GostSuite) TestTimers(c *C) {
 	})
 }
 
-func (s *GostSuite) TestGauges(c *C) {
+func (*GostSuite) TestGauges(c *C) {
 	sendGostMessages(c, "foobar:3|g")
 	// Hack to ensure that the first foobar message gets processed before the second
 	// TODO: find a better way
@@ -279,7 +279,7 @@ func (s *GostSuite) TestGauges(c *C) {
 	})
 }
 
-func (s *GostSuite) TestSets(c *C) {
+func (*GostSuite) TestSets(c *C) {
 	sendGostMessages(c, "foobar:123|s", "foobar:234|s", "foobar:123|s", "baz:456|s")
 	checkAllApprox(c, []testCase{
 		{"foobar.set", 2.0},
@@ -287,7 +287,7 @@ func (s *GostSuite) TestSets(c *C) {
 	})
 }
 
-func (s *GostSuite) TestMetaStats(c *C) {
+func (*GostSuite) TestMetaStats(c *C) {
 	sendGostMessages(c, "foobar:2|c", "foobar:3|g", "foobar:asdf|s")
 	sendGostMessages(c, "baz:300|g")
 	sendGostMessages(c, "baz:300|asdfasdf")
@@ -301,7 +301,7 @@ func (s *GostSuite) TestMetaStats(c *C) {
 	})
 }
 
-func (s *GostSuite) TestWithStatClearing(c *C) {
+func (*GostSuite) TestWithStatClearing(c *C) {
 	conf.ClearStatsBetweenFlushes = true
 	sendGostMessages(c, "a:1|c")
 	sendGostMessages(c, "b:2|ms")
@@ -316,7 +316,7 @@ func (s *GostSuite) TestWithStatClearing(c *C) {
 	c.Check(msg.Parsed["com.example.foobar.count"].Value, approx, 2.0)
 }
 
-func (s *GostSuite) TestWithoutStatClearing(c *C) {
+func (*GostSuite) TestWithoutStatClearing(c *C) {
 	conf.ClearStatsBetweenFlushes = false
 	sendGostMessages(c, "a:1|c", "b:2|ms", "c:3|g", "d:4|s")
 	time.Sleep(time.Millisecond)
@@ -334,7 +334,7 @@ func (s *GostSuite) TestWithoutStatClearing(c *C) {
 	c.Check(msg.Parsed["com.example.foobar.count"].Value, approx, 2.0)
 }
 
-func (s *GostSuite) TestSanitization(c *C) {
+func (*GostSuite) TestSanitization(c *C) {
 	allChars := []byte{}
 	for i := 33; i <= 126; i++ {
 		c := byte(i)
@@ -366,7 +366,7 @@ func (s *GostSuite) TestSanitization(c *C) {
 	})
 }
 
-func (s *GostSuite) TestForwardedKeyParsing(c *C) {
+func (*GostSuite) TestForwardedKeyParsing(c *C) {
 	forwardingEnabled = true
 	sendGostMessages(c, "f|foo:1|c", "f|f|bar:1|c", "f||baz:1|c", "quf|ux:1|c")
 	checkAllApprox(c, []testCase{
@@ -383,7 +383,7 @@ func (s *GostSuite) TestForwardedKeyParsing(c *C) {
 	c.Check(msg.Parsed["global.|baz.count"].Value, approx, 1.0)
 }
 
-func (s *GostSuite) TestSampleRates(c *C) {
+func (*GostSuite) TestSampleRates(c *C) {
 	sendGostMessages(c, "a:1|c|@0.1", "b:1|c|@1.0", "c:1|c|@3.0", "d:1|c|@0.0", "e:1|c|@-0.5")
 	msg := rec.waitForMessage()
 	c.Check(msg.Parsed["com.example.a.count"].Value, approx, 10.0)
@@ -393,7 +393,7 @@ func (s *GostSuite) TestSampleRates(c *C) {
 	}
 }
 
-func (s *GostSuite) TestMultilineMessage(c *C) {
+func (*GostSuite) TestMultilineMessage(c *C) {
 	sendGostMessages(c, "foobar:3|c\nfoobar:5|c\nbaz:200|g")
 	checkAllApprox(c, []testCase{
 		{"foobar.count", 8.0},
