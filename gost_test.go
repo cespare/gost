@@ -372,6 +372,14 @@ func (*GostSuite) TestForwardedKeyParsing(c *C) {
 	c.Check(msg.Parsed["global.|baz.count"].Value, approx, 1.0)
 }
 
+func (*GostSuite) TestNoForwarding(c *C) {
+	forwardingEnabled = false
+	sendGostMessages(c, "f|foo:1|c")
+	checkAllApprox(c, []testCase{
+		{"f|foo.count", 1.0},
+	})
+}
+
 func (*GostSuite) TestSampleRates(c *C) {
 	sendGostMessages(c, "a:1|c|@0.1", "b:1|c|@1.0", "c:1|c|@3.0", "d:1|c|@0.0", "e:1|c|@-0.5")
 	msg := rec.waitForMessage()
