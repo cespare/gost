@@ -14,8 +14,8 @@ const (
 	// Must be aligned with statsd's flush interval
 	interval    = 20 * time.Second
 	testLength  = 15 * time.Second
-	parallelism = 100
-	startDelay  = 3000 * time.Microsecond
+	parallelism = 50
+	startDelay  = 1000 * time.Microsecond
 
 	listenaddr = "localhost:2003"
 	statsdaddr = "localhost:8125"
@@ -110,7 +110,7 @@ func main() {
 	delay := startDelay
 	go runTest(delay)
 	for _ = range time.NewTicker(interval).C {
-		delay -= 500 * time.Microsecond
+		delay = (delay / 4) * 3
 		go runTest(delay)
 	}
 }
