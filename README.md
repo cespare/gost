@@ -30,8 +30,8 @@ section below for details). **values** are human-printed floats:
     /^[+\-]?\d+(\.\d+)?$/
 
 Counters have a sampling rate, which is the same format as a value. This tells gost that the counter is being
-sampled at some rate, and gost multiplies the counter value by the reciprocal of the sampling rate to obtain
-an estimate of the true value.
+sampled at some rate, and gost divides the counter value by the sampling rate to obtain an estimate of the
+true value.
 
 **Counters**
 
@@ -62,13 +62,14 @@ stats. For each timer key, gost records the following metrics during each flush 
 * `timer.sum`: the total sum of all timer values during the interval. This value, in concert with
   `timer.count`, can be used (by some other system) to compute mean values across flush buckets.
 
-Syntax: `<key>:<value>|ms(|@<sampling-rate>)?`
+Syntax: `<key>:<value>|ms`
 
 Example: `s3_backup:1411|ms`
 
 **Gauges**
 
-A gauge is simply a value that varies over time.
+A gauge is simply a value that varies over time. The most recent value of the gauge is the result gost emits
+during each flush.
 
 Syntax: `<key>:<value>|g`
 
@@ -89,7 +90,9 @@ Gost sends back some stats about itself to graphite as well. This includes:
 
 * `gost.bad_messages_seen`: a counter for the number of malformed messages gost has received
 * `gost.packets_received`: a counter for the number of packets gost has read
-* `gost.distinct_metrics_flushed`: a gauge for the number of stats sent to graphite during the previous flush
+* `gost.distinct_metrics_flushed`: a gauge for the number of stats sent to graphite during this flush
+* `gost.distinct_forwarded_metrics_flushed`: a gauge for the number of stats forwarded to another gost during
+  this flush (see Counter Forwarding, below)
 
 There are some other counters for various error conditions. Most of these also show up in the stdout of gost
 if you use the `debug_logging = true` option in the configuration.
@@ -105,15 +108,15 @@ info about the host. See [the configuration file](conf.toml) for how to set this
 ### Debug interface
 
 The `debug_port` setting controls the port of a local server that gost starts up for debugging. Gost will
-print its (UDP) input and (Graphite) output via TCP to any client that connects to this port. So if you're using
-`debug_port = 8126` as in the example config, then you can connect like this:
+print its (UDP) input and (Graphite) output via TCP to any client that connects to this port. So if you're
+using `debug_port = 8126` as in the example config, then you can connect like this:
 
     $ telnet localhost 8126
 
 and you will see gost's input and output. This is very handy for debugging. You may want to filter out just a
 subset of the data; for instance:
 
-    $ netcat localhost 8127 | grep '\[out\]' # just outbound messages
+    $ nc localhost 8127 | grep '\[out\]' # just outbound messages
 
 ## Key Format
 
@@ -134,11 +137,70 @@ source char |             converted to              | reason
 
 Additionally, note that a trailing `.` on a key will be ignored by Graphite, so `foo.` is the same as `foo`.
 
+## Counter Forwarding
+
+Instead of sending to graphite, gost can forward metrics (counters only) to another gost, which in turn sends
+to graphite.
+
+Enable forwarding by setting the `forwarding_addr` option to the network address of the gost to which to
+forward. Then to forward a counter, prefix it with `f|`:
+
+    f|web.requests:1|c
+
+This counter will not be flushed to graphite, but will be sent to the forwarder gost.
+
+To enable gost to act as a forwarder (that is, it will accept forwarded messages in addition to normal UDP
+messages), set the `forwarder_listen_addr` to the bind address to use to listen for forwarded messages. You
+can also use the `forwarded_namespace` setting to control the namespace applied to forwarded stats.
+
+**Motivation:** It's inconvenient to always have to sum your graphite queries across all your servers -- often
+you only care about the global count. But graphite doesn't add together counters for you when it ingests them.
+To get around this, some folks run a network topology where they forward all their metrics into a single
+statsd across the network. This has some big downsides:
+
+* It's lossy (UDP)
+* The QPS is really limited in a setup like this
+* It's a lot of network traffic
+
+With counter forwarding, you can get a lot of the advantages without the disadvantages:
+
+* Gost-to-gost forwarding is over TCP
+* Gosts only flush once every N milliseconds, so the raw stats don't cross the network
+* The forwarding protocol is an efficient binary format
+* You can handle a large volume of metrics this way
+
+Of course, this is still a single point of failure in your metrics collection system, but if you're using
+Graphite you've probably got that anyway.
+
+I suggest you host your forwarder gost instance alongside Graphite.
+
+## Tuning
+
+If you're trying to push a lot of stats into gost, it may start dropping messages. This may be because your OS
+is using a very limited amount of buffer for the UDP socket. You can typically tune this; on my linux system,
+for instance, I can bump the limits by using sysctl:
+
+```
+# 25MiB read and write buffer sizes
+net.core.rmem_max=26214400
+net.core.rmem_default=26214400
+net.core.wmem_max=26214400
+net.core.wmem_default=26214400
+```
+
+With such of tuning your gost instance should be able to easily handle hundreds of thousands of messages per
+second on moderate hardware.
+
+(This will, of course, incur a lot of system load and typically you'll want to use sampling to limit the gost
+qps to something reasonable.)
+
 ## Differences with StatsD
 
 * Statsd only allows keys matching `/^[a-zA-Z0-9\-_\.]+$/`; gost is more permissive (see Key Format, above).
 * Gauges cannot be deltas; they must be absolute values.
 * Timers don't return as much information as in statsd, and they're not customizable.
-* gost can record os stats from the host and deliver them to graphite as well.
+* gost can record OS stats from the host and deliver them to graphite as well.
 * The "meta-stats" gost sends back are different from StatsD (there are a lot fewer of them)
-* Gost is very fast. It can handle several times the load statsd can before dropping messages.
+* Gost is very fast. It can handle several times the load statsd can before dropping messages. In my
+  unscientific tests on my Linux dev machine, I got statsd up to about 80k qps before it started dropping
+  messages, while gost got to 350k+ qps without dropping any messages.
