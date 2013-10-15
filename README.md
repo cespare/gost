@@ -174,6 +174,8 @@ Graphite you've probably got that anyway.
 
 I suggest you host your forwarder gost instance alongside Graphite.
 
+It is possible for a gost instance to forward counters to itself.
+
 ## Tuning
 
 If you're trying to push a lot of stats into gost, it may start dropping messages. This may be because your OS
