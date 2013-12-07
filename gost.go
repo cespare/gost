@@ -110,6 +110,11 @@ type OsStatsConf struct {
 	DiskUsage       map[string]*DiskUsageConf `toml:"disk_usage"`
 }
 
+type ScriptsConf struct {
+	Path          string `toml:"path"`
+	RunIntervalMS int    `toml:"run_interval_ms"`
+}
+
 type Conf struct {
 	GraphiteAddr             string       `toml:"graphite_addr"`
 	ForwardingAddr           string       `toml:"forwarding_addr"`
@@ -122,6 +127,7 @@ type Conf struct {
 	FlushIntervalMS          int          `toml:"flush_interval_ms"`
 	Namespace                string       `toml:"namespace"`
 	OsStats                  *OsStatsConf `toml:"os_stats"`
+	Scripts                  *ScriptsConf `toml:"scripts"`
 }
 
 func handleMessages(buf []byte) {
@@ -379,6 +385,9 @@ func main() {
 	go aggregate()
 	if conf.OsStats != nil {
 		go checkOsStats()
+	}
+	if conf.Scripts != nil {
+		go runScripts()
 	}
 
 	if forwardingEnabled {

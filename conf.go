@@ -88,6 +88,19 @@ func parseConf() {
 		}
 	}
 
+	scripts := conf.Scripts
+	if scripts != nil {
+		if !meta.IsDefined("scripts", "path") {
+			log.Fatal("scripts section provided without path.")
+		}
+		if !meta.IsDefined("scripts", "run_interval_ms") {
+			log.Fatal("scripts section provided without run_interval_ms.")
+		}
+		if scripts.RunIntervalMS <= 0 {
+			log.Fatal("scripts.run_interval_ms must be positive")
+		}
+	}
+
 	conf.Namespace = filterNamespace(conf.Namespace)
 	conf.ForwardedNamespace = filterNamespace(conf.ForwardedNamespace)
 }
