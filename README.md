@@ -118,8 +118,9 @@ If one line is unable to be parsed, gost stops trying to parse the output of tha
 takes so long that the next run interval passes, that script is not started again until it is finished (so at
 most one copy of each script is running at once).
 
-The scripts are executed with no arguments and stdin/stderr are null devices. Only stdout is used. Any errors
-running the script (including a non-zero exit status) trigger debugging output and meta-stats.
+The scripts are executed with no arguments from gost's current directory. Stdin and stderr are null devices.
+Only stdout is used. Scripts must be executable. Any errors running the script (including a non-zero exit
+status) trigger debugging output and meta-stats.
 
 ### Debug interface
 
