@@ -132,27 +132,31 @@ type Conf struct {
 
 func handleMessages(buf []byte) {
 	for _, msg := range bytes.Split(buf, []byte{'\n'}) {
-		if len(msg) == 0 {
-			continue
-		}
-		debugServer.Print("[in] ", msg)
-		stat, ok := parseStatsdMessage(msg)
-		if !ok {
-			log.Println("bad message:", string(msg))
-			metaCount("bad_messages_seen")
-			continue
-		}
-		if stat.Forward {
-			if stat.Type != StatCounter {
-				metaCount("bad_metric_type_for_forwarding")
-				continue
-			}
-			forwardingIncoming <- stat
-		} else {
-			incoming <- stat
-		}
+		handleMessage(msg)
 	}
 	bufPool <- buf[:cap(buf)] // Reset buf's length and return to the pool
+}
+
+func handleMessage(msg []byte) {
+	if len(msg) == 0 {
+		return
+	}
+	debugServer.Print("[in] ", msg)
+	stat, ok := parseStatsdMessage(msg)
+	if !ok {
+		log.Println("bad message:", string(msg))
+		metaCount("bad_messages_seen")
+		return
+	}
+	if stat.Forward {
+		if stat.Type != StatCounter {
+			metaCount("bad_metric_type_for_forwarding")
+			return
+		}
+		forwardingIncoming <- stat
+	} else {
+		incoming <- stat
+	}
 }
 
 func clientServer(c *net.UDPConn) error {

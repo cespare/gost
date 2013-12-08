@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"io/ioutil"
 	"os/exec"
 	"path/filepath"
@@ -27,14 +26,7 @@ func runScript(path string) (err error) {
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		stat, ok := parseStatsdMessage(line)
-		if !ok {
-			return fmt.Errorf("script line was not a statsd message: %s", string(line))
-		}
-		incoming <- stat
+		handleMessage(line)
 	}
 	if err := scanner.Err(); err != nil {
 		return err
