@@ -41,7 +41,7 @@ func runScripts() {
 	for _ = range ticker.C {
 		files, err := ioutil.ReadDir(conf.Scripts.Path)
 		if err != nil {
-			dbg.Printf("failed to read scripts in %s: %s\n", conf.Scripts.Path, err)
+			dbg.Printf("failed to read scripts in %s: %s", conf.Scripts.Path, err)
 			metaCount("run_scripts_list_dir_failures")
 			continue
 		}
@@ -52,12 +52,14 @@ func runScripts() {
 			}
 			path := filepath.Join(conf.Scripts.Path, file.Name())
 			if _, ok := currentlyRunning[path]; ok {
+				dbg.Printf("not running script because a previous instance is still running: %s", path)
 				continue
 			}
+			dbg.Printf("running script: %s", path)
 			currentlyRunning[path] = struct{}{}
 			go func(p string) {
 				if err := runScript(p); err != nil {
-					dbg.Printf("error running script at %s: %s\n", p, err)
+					dbg.Printf("error running script at %s: %s", p, err)
 					metaCount("run_script_failures")
 				}
 				scriptMutex.Lock()

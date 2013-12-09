@@ -30,7 +30,7 @@ func parseConf() {
 	}
 	meta, err := toml.DecodeReader(f, conf)
 	if err != nil {
-		log.Fatalf("Error decoding %s: %s\n", *configFile, err)
+		log.Fatalf("Error decoding %s: %s", *configFile, err)
 	}
 
 	for _, field := range []string{"graphite_addr", "port", "debug_port", "flush_interval_ms", "namespace"} {
@@ -67,17 +67,17 @@ func parseConf() {
 				switch t {
 				case 1, 5, 15:
 				default:
-					log.Fatalf("bad load average time window: %d\n", t)
+					log.Fatalf("bad load average time window: %d", t)
 				}
 			}
 		}
 		for name, options := range osStats.DiskUsage {
 			if options == nil {
-				log.Fatalf("bad disk usage section %s.\n", name)
+				log.Fatalf("bad disk usage section %s.", name)
 			}
 			for _, field := range []string{"path", "values"} {
 				if !meta.IsDefined("os_stats", "disk_usage", name, field) {
-					log.Fatalf("missing %s in disk usage section %s.\n", field, name)
+					log.Fatalf("missing %s in disk usage section %s.", field, name)
 				}
 			}
 			switch options.Values {
