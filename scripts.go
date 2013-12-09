@@ -10,6 +10,10 @@ import (
 )
 
 func runScript(path string) (err error) {
+	var count int64
+	defer func() {
+		dbg.Printf("script `%s` exited; emitted %d stat(s)", path, count)
+	}()
 	cmd := exec.Command(path)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -27,6 +31,7 @@ func runScript(path string) (err error) {
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		handleMessage(line)
+		count++
 	}
 	if err := scanner.Err(); err != nil {
 		return err
