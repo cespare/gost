@@ -1,37 +1,18 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
 	"runtime"
-	"strconv"
 	"syscall"
 	"time"
+
+	proc "github.com/cespare/goproc"
 )
 
 var (
 	loadAvgTypes = []int{1, 5, 15}
 	nCPU         = float64(runtime.NumCPU())
 )
-
-func osLoadAverages() (avgs [3]float64, err error) {
-	text, err := ioutil.ReadFile("/proc/loadavg")
-	if err != nil {
-		return avgs, err
-	}
-	fields := bytes.Fields(text)
-	if len(fields) < 3 {
-		return avgs, fmt.Errorf("found fewer than 3 fields in /proc/loadavg")
-	}
-	for i := range avgs {
-		avgs[i], err = strconv.ParseFloat(string(fields[i]), 64)
-		if err != nil {
-			return avgs, fmt.Errorf("error parsing /proc/loadavg: %s", err)
-		}
-	}
-	return avgs, nil
-}
 
 func osGauge(name string, value float64) {
 	incoming <- &Stat{
@@ -46,7 +27,7 @@ func reportLoadAverages() {
 	if !conf.OsStats.LoadAvg && !conf.OsStats.LoadAvgPerCPU {
 		return
 	}
-	loadAverages, err := osLoadAverages()
+	loadAverages, err := proc.LoadAverages()
 	if err != nil {
 		metaCount("load_avg_check_failures")
 		dbg.Println("failed to check OS load average:", err)
