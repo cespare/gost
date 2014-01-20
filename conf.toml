@@ -36,6 +36,18 @@ namespace = "example.%H"
 # messages and the number of packets received).
 meta_stats = true
 
+# The scripts section specifies how to run auxiliary scripts. This section should be removed or commented out
+# if no scripts are going to be used.
+[scripts]
+
+# This is a directory where scripts are located. If a relative path, it is relative to the current working
+# directory of the gost process.
+path = "scripts"
+
+# The frequency with which to run scripts. Each script is started this frequently. The next run of the script
+# does not start until that script has exited, even if it misses run intervals.
+run_interval_ms = 10000
+
 # The os_stats section specifies stats that gost will determine from the host system.
 # NOTE: Everything below here is linux-specific. os_stats pulls information from the /proc filesystem and
 # Linux syscalls.
@@ -59,15 +71,3 @@ load_avg_per_cpu = true
 [os_stats.disk_usage.data_volume]
 path = "/mnt/data"
 values = "absolute"
-
-# The scripts section specifies how to run auxiliary scripts. This section should be removed or commented out
-# if no scripts are going to be used.
-[scripts]
-
-# This is a directory where scripts are located. If a relative path, it is relative to the current working
-# directory of the gost process.
-path = "scripts"
-
-# The frequency with which to run scripts. Each script is started this frequently. The next run of the script
-# does not start until that script has exited, even if it misses run intervals.
-run_interval_ms = 10000
