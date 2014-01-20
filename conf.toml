@@ -58,7 +58,7 @@ load_avg_per_cpu = true
 # used (0.0 - 1.0).
 [os_stats.disk_usage.data_volume]
 path = "/mnt/data"
-values = "fraction"
+values = "absolute"
 
 # The scripts section specifies how to run auxiliary scripts. This section should be removed or commented out
 # if no scripts are going to be used.
