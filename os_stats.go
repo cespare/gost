@@ -11,11 +11,9 @@ import (
 )
 
 var (
-	loadAvgTypeToIdx = map[int]int{1: 0, 5: 1, 15: 2}
-	nCPU             float64
+	loadAvgTypes = []int{1, 5, 15}
+	nCPU         = float64(runtime.NumCPU())
 )
-
-func init() { nCPU = float64(runtime.NumCPU()) }
 
 func osLoadAverages() (avgs [3]float64, err error) {
 	text, err := ioutil.ReadFile("/proc/loadavg")
@@ -45,7 +43,7 @@ func osGauge(name string, value float64) {
 }
 
 func reportLoadAverages() {
-	if len(conf.OsStats.LoadAvg) == 0 && len(conf.OsStats.LoadAvgPerCPU) == 0 {
+	if !conf.OsStats.LoadAvg && !conf.OsStats.LoadAvgPerCPU {
 		return
 	}
 	loadAverages, err := osLoadAverages()
@@ -54,12 +52,15 @@ func reportLoadAverages() {
 		dbg.Println("failed to check OS load average:", err)
 		return
 	}
-	for _, typ := range conf.OsStats.LoadAvg {
-		osGauge(fmt.Sprintf("load_avg_%d", typ), loadAverages[loadAvgTypeToIdx[typ]])
+	if conf.OsStats.LoadAvg {
+		for i, avg := range loadAverages {
+			osGauge(fmt.Sprintf("load_avg_%d", loadAvgTypes[i]), avg)
+		}
 	}
-
-	for _, typ := range conf.OsStats.LoadAvgPerCPU {
-		osGauge(fmt.Sprintf("load_avg_per_cpu_%d", typ), loadAverages[loadAvgTypeToIdx[typ]]/nCPU)
+	if conf.OsStats.LoadAvgPerCPU {
+		for i, avg := range loadAverages {
+			osGauge(fmt.Sprintf("load_avg_per_cpu_%d", loadAvgTypes[i]), avg/nCPU)
+		}
 	}
 }
 

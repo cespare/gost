@@ -105,8 +105,8 @@ type DiskUsageConf struct {
 
 type OsStatsConf struct {
 	CheckIntervalMS int                       `toml:"check_interval_ms"`
-	LoadAvg         []int                     `toml:"load_avg"`
-	LoadAvgPerCPU   []int                     `toml:"load_avg_per_cpu"`
+	LoadAvg         bool                      `toml:"load_avg"`
+	LoadAvgPerCPU   bool                      `toml:"load_avg_per_cpu"`
 	DiskUsage       map[string]*DiskUsageConf `toml:"disk_usage"`
 }
 

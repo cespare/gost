@@ -62,15 +62,6 @@ func parseConf() {
 		} else {
 			osStats.CheckIntervalMS = conf.FlushIntervalMS
 		}
-		for _, field := range [][]int{osStats.LoadAvg, osStats.LoadAvgPerCPU} {
-			for _, t := range field {
-				switch t {
-				case 1, 5, 15:
-				default:
-					log.Fatalf("bad load average time window: %d", t)
-				}
-			}
-		}
 		for name, options := range osStats.DiskUsage {
 			if options == nil {
 				log.Fatalf("bad disk usage section %s.", name)

@@ -46,11 +46,10 @@ meta_stats = true
 # performed every flush_interval_ms.
 check_interval_ms = 30000
 
-# load_avg and load_avg_per_cpu return the 1/5/15 minute load averages; the latter divides the numbers by the
+# load_avg and load_avg_per_cpu show the 1/5/15 minute load averages; the latter divides the numbers by the
 # number of logical CPUs to normalize them.
-# NOTE: The valid values are obviously 1, 5, and 15 only.
-load_avg = [1, 5, 15]
-load_avg_per_cpu = [1, 5, 15]
+#load_avg = true
+load_avg_per_cpu = true
 
 # A disk_usage section generates a gauge for how much space is used on a particular volume.
 
