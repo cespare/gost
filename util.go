@@ -23,16 +23,17 @@ func (d _dbg) Println(args ...interface{}) {
 	}
 }
 
-// metaCount increments a counter for an internal gost stat.
-func metaCount(name string) {
-	s := &Stat{
+// metaCount advances a counter for an internal gost stat.
+func metaCount(name string, value float64) {
+	incoming <- &Stat{
 		Type:       StatCounter,
 		Name:       "gost." + name,
-		Value:      1.0,
+		Value:      value,
 		SampleRate: 1.0,
 	}
-	incoming <- s
 }
+
+func metaInc(name string) { metaCount(name, 1) }
 
 func isSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\r' || c == '\n'

@@ -58,16 +58,51 @@ run_interval_ms = 10000
 # performed every flush_interval_ms.
 #check_interval_ms = 30000
 
-# load_avg and load_avg_per_cpu show the 1/5/15 minute load averages; the latter divides the numbers by the
-# number of logical CPUs to normalize them.
-#load_avg = true
-load_avg_per_cpu = true
+# If os_stats.mem is set, two os_stats gauges will be reported:
+# mem.used: This is the used memory (MemTotal - MemFree), either as an absolute number or a fraction of
+#   MemTotal, depending on whether breakdown is "absolute" or "fraction".
+# mem.cached: This is the memory used for disk cache, either as an absolute number or a fraction of MemTotal.
+[os_stats.mem]
+breakdown = "fraction" # Default is "fraction", if unspecified.
 
-# A disk_usage section generates a gauge for how much space is used on a particular volume.
+# The os_stats.cpu section controls which CPU stats are reported.
+[os_stats.cpu]
+# If stat is set, then the following os_stats gauges will be reported (all of these are in fractions of total
+# CPU time across all CPUs, which is the sum of all cpu counters including idle time).
+# cpu.{user,nice,system,iowait}
+stat = true
+# If load_avg is set, then the 1/5/15-minute CPU load averages are reported. The valid values for load_avg are
+# "total", which causes the numbers to be reported directly:
+# cpu.load_avg_{1,5,15}
+# and "per_cpu", which causes the numbers to be divided by the number of logical CPUs to normalize them:
+# cpu.load_avg_per_cpu_{1,5,15}
+load_avg = "per_cpu" # or "total"
 
-# In this example, the gauge is called 'data_volume', it monitors /mnt/data, and the gauge is the absolute
-# amount of space used (in bytes). If "fraction" is used instead, it will report the fraction of the total
-# used (0.0 - 1.0).
-[os_stats.disk_usage.data_volume]
-path = "/mnt/data"
-values = "absolute"
+# The os_stats.net controls which network stats are reported.
+[os_stats.net]
+# If tcp is set, report TCP connection stats:
+# net.tcp.{active,passive}_opens: the number of {outgoing, incoming} TCP connections established
+# net.tcp.current_connections: a gauge for the current TCP connections
+tcp = true
+# If udp is set, report UDP packet stats:
+# net.udp.{in,out}_datagrams: Counters for incoming/outgoing UDP packets
+udp = true
+# Devices is a list of network interfaces to report per-device stats:
+# net.devices.eth0.{receive,transmit}_bytes: Bytes received/transmitted
+# net.devices.eth0.{receive,transmit}_packets: Packets received/transmitted
+# net.devices.eth0.{receive,transmit}_errors: Receive/transmit errors
+devices = ["eth0", "lo"]
+
+# A disk section generates stats for a particular disk device. It is identified by its mount point. In this
+# example, the disk is called 'data_volume' and it monitors /mnt/data
+[os_stats.disk.data_volume]
+path = "/mnt/este"
+# If usage is set, a gauge will report how much space is used on the disk, either as an absolute amount (in
+# bytes) or as a fraction of total:
+# disk.data_volume.usage
+usage = "fraction" # or "absolute"
+# If io is set, then io stats will be reported for this device:
+# disk.data_volume.io.{reads,writes}: The number of disk reads and writes.
+# disk.data_volume.io.{read,write}_bytes: The number of bytes read/written.
+# Note that the sum of the first counter pair is what is often called disk IOPS (if taken per second).
+io = true

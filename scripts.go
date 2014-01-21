@@ -47,7 +47,7 @@ func runScripts() {
 		files, err := ioutil.ReadDir(conf.Scripts.Path)
 		if err != nil {
 			dbg.Printf("failed to read scripts in %s: %s", conf.Scripts.Path, err)
-			metaCount("run_scripts_list_dir_failures")
+			metaInc("run_scripts_list_dir_failures")
 			continue
 		}
 		scriptMutex.Lock()
@@ -65,7 +65,7 @@ func runScripts() {
 			go func(p string) {
 				if err := runScript(p); err != nil {
 					dbg.Printf("error running script at %s: %s", p, err)
-					metaCount("run_script_failures")
+					metaInc("run_script_failures")
 				}
 				scriptMutex.Lock()
 				delete(currentlyRunning, path)

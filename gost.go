@@ -74,7 +74,7 @@ type Stat struct {
 	Forward    bool
 	Name       string
 	Value      float64
-	SampleRate float64 // Only for counts
+	SampleRate float64 // Only for counters
 }
 
 // tagToStatType maps a tag (e.g., []byte("c")) to a StatType (e.g., StatCounter).
@@ -98,38 +98,6 @@ func tagToStatType(b []byte) (StatType, bool) {
 	return 0, false
 }
 
-type DiskUsageConf struct {
-	Path   string `toml:"path"`
-	Values string `toml:"values"`
-}
-
-type OsStatsConf struct {
-	CheckIntervalMS int                       `toml:"check_interval_ms"`
-	LoadAvg         bool                      `toml:"load_avg"`
-	LoadAvgPerCPU   bool                      `toml:"load_avg_per_cpu"`
-	DiskUsage       map[string]*DiskUsageConf `toml:"disk_usage"`
-}
-
-type ScriptsConf struct {
-	Path          string `toml:"path"`
-	RunIntervalMS int    `toml:"run_interval_ms"`
-}
-
-type Conf struct {
-	GraphiteAddr             string       `toml:"graphite_addr"`
-	ForwardingAddr           string       `toml:"forwarding_addr"`
-	ForwarderListenAddr      string       `toml:"forwarder_listen_addr"`
-	ForwardedNamespace       string       `toml:"forwarded_namespace"`
-	Port                     int          `toml:"port"`
-	DebugPort                int          `toml:"debug_port"`
-	DebugLogging             bool         `toml:"debug_logging"`
-	ClearStatsBetweenFlushes bool         `toml:"clear_stats_between_flushes"`
-	FlushIntervalMS          int          `toml:"flush_interval_ms"`
-	Namespace                string       `toml:"namespace"`
-	OsStats                  *OsStatsConf `toml:"os_stats"`
-	Scripts                  *ScriptsConf `toml:"scripts"`
-}
-
 func handleMessages(buf []byte) {
 	for _, msg := range bytes.Split(buf, []byte{'\n'}) {
 		handleMessage(msg)
@@ -145,12 +113,12 @@ func handleMessage(msg []byte) {
 	stat, ok := parseStatsdMessage(msg)
 	if !ok {
 		log.Println("bad message:", string(msg))
-		metaCount("bad_messages_seen")
+		metaInc("bad_messages_seen")
 		return
 	}
 	if stat.Forward {
 		if stat.Type != StatCounter {
-			metaCount("bad_metric_type_for_forwarding")
+			metaInc("bad_metric_type_for_forwarding")
 			return
 		}
 		forwardingIncoming <- stat
@@ -167,9 +135,9 @@ func clientServer(c *net.UDPConn) error {
 		if err != nil {
 			return err
 		}
-		metaCount("packets_received")
+		metaInc("packets_received")
 		if n >= udpBufSize {
-			metaCount("udp_message_too_large")
+			metaInc("udp_message_too_large")
 			continue
 		}
 		go handleMessages(buf[:n])
@@ -202,7 +170,7 @@ func handleForwarded(c net.Conn) {
 				return
 			}
 			log.Println("Error reading forwarded message:", err)
-			metaCount("error_reading_forwarded_message")
+			metaInc("error_reading_forwarded_message")
 			return
 		}
 		forwarderIncoming <- &BufferedStats{Counts: counts}
@@ -387,8 +355,8 @@ func main() {
 
 	go flush()
 	go aggregate()
-	if conf.OsStats != nil {
-		go checkOsStats()
+	if conf.OSStats != nil {
+		go checkOSStats()
 	}
 	if conf.Scripts != nil {
 		go runScripts()

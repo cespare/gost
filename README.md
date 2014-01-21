@@ -99,11 +99,9 @@ if you use the `debug_logging = true` option in the configuration.
 
 ### OS stats
 
-One nice feature of gost is that, if you're running on a Linux system, it can automatically send back some
-info about the host. See [the configuration file](conf.toml) for how to set this up.
-
-* Load averages for 1, 5, and 15 minutes; either as-is or divided by the number of CPUs for convenience
-* Disk usage for any given filesystem path
+One nice feature of gost is that, if you're running on a Linux system, it can automatically send back
+statistics about the host, including memory, CPU, network, and disk information. See [the example
+configuration file](conf.toml) for how to set this up, and detailed information on what counters are sent.
 
 ### Script stats
 
