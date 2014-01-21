@@ -56,7 +56,7 @@ run_interval_ms = 10000
 
 # check_interval_ms is used to change the frequency OS stat checks are done. If not given, the checks will be
 # performed every flush_interval_ms.
-#check_interval_ms = 30000
+check_interval_ms = 30000
 
 # If os_stats.mem is set, two os_stats gauges will be reported:
 # mem.used: This is the used memory (MemTotal - MemFree), either as an absolute number or a fraction of
@@ -96,7 +96,7 @@ devices = ["eth0", "lo"]
 # A disk section generates stats for a particular disk device. It is identified by its mount point. In this
 # example, the disk is called 'data_volume' and it monitors /mnt/data
 [os_stats.disk.data_volume]
-path = "/mnt/este"
+path = "/mnt/data"
 # If usage is set, a gauge will report how much space is used on the disk, either as an absolute amount (in
 # bytes) or as a fraction of total:
 # disk.data_volume.usage
