@@ -113,12 +113,12 @@ func handleMessage(msg []byte) {
 	stat, ok := parseStatsdMessage(msg)
 	if !ok {
 		log.Println("bad message:", string(msg))
-		metaInc("bad_messages_seen")
+		metaInc("errors.bad_message")
 		return
 	}
 	if stat.Forward {
 		if stat.Type != StatCounter {
-			metaInc("bad_metric_type_for_forwarding")
+			metaInc("errors.bad_metric_type_for_forwarding")
 			return
 		}
 		forwardingIncoming <- stat
@@ -137,7 +137,7 @@ func clientServer(c *net.UDPConn) error {
 		}
 		metaInc("packets_received")
 		if n >= udpBufSize {
-			metaInc("udp_message_too_large")
+			metaInc("errors.udp_message_too_large")
 			continue
 		}
 		go handleMessages(buf[:n])
@@ -170,7 +170,7 @@ func handleForwarded(c net.Conn) {
 				return
 			}
 			log.Println("Error reading forwarded message:", err)
-			metaInc("error_reading_forwarded_message")
+			metaInc("errors.forwarded_message_read")
 			return
 		}
 		forwarderIncoming <- &BufferedStats{Counts: counts}

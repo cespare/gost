@@ -257,25 +257,25 @@ func reportOSStats() {
 	}()
 	if conf.OSStats.Mem != nil {
 		if err := reportMemStats(); err != nil {
-			metaInc("os_stats_mem_check_failures")
+			metaInc("errors.os_stats_mem_check")
 			dbg.Println("mem stats check failure:", err)
 		}
 	}
 	if conf.OSStats.CPU != nil {
 		if err := reportCPUStats(); err != nil {
-			metaInc("os_stats_cpu_check_failures")
+			metaInc("errors.os_stats_cpu_check")
 			dbg.Println("cpu stats check failure:", err)
 		}
 	}
 	if conf.OSStats.Net != nil {
 		if err := reportNetStats(); err != nil {
-			metaInc("os_stats_net_check_failures")
+			metaInc("errors.os_stats_net_check")
 			dbg.Println("net stats check failure:", err)
 		}
 	}
 	if conf.OSStats.Disk != nil {
 		if err := reportDiskStats(); err != nil {
-			metaInc("os_stats_disk_check_failures")
+			metaInc("errors.os_stats_disk_check")
 			dbg.Println("disk stats check failure:", err)
 		}
 	}
