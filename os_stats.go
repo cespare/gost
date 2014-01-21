@@ -114,14 +114,12 @@ func reportNetStats() error {
 			if !ok {
 				return errors.New("Cannot determine TCP stats using package proc")
 			}
-			newStats := counterStats{
-				uint64(stats["ActiveOpens"]), uint64(stats["PassiveOpens"]), uint64(stats["CurrEstab"]),
-			}
+			osGauge("net.tcp.current_connections", float64(stats["CurrEstab"]))
+			newStats := counterStats{uint64(stats["ActiveOpens"]), uint64(stats["PassiveOpens"])}
 			if tcpStats != nil {
 				diff := newStats.Sub(tcpStats)
 				osCounter("net.tcp.active_opens", float64(diff[0]))
 				osCounter("net.tcp.passive_opens", float64(diff[1]))
-				osCounter("net.tcp.current_connections", float64(diff[2]))
 			}
 			tcpStats = newStats
 		}
