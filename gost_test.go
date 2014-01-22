@@ -281,7 +281,7 @@ func (*GostSuite) TestMetaStats(c *C) {
 	sendGostMessages(c, "baz:300|g")
 	sendGostMessages(c, "baz:300|asdfasdf")
 	checkAllApprox(c, []testCase{
-		{"gost.bad_messages_seen.count", 2.0},
+		{"gost.errors.bad_message.count", 2.0},
 		{"gost.packets_received.count", 5.0},
 		// foobar/count (2), foobar/gauge (1), baz/gauge (1), gost.packets_received/count (2),
 		// gost.bad_messages_seen/count (2), gost.distinct_metrics_flushed/gauge (1)
