@@ -59,8 +59,8 @@ run_interval_ms = 10000
 check_interval_ms = 30000
 
 # If os_stats.mem is set, two os_stats gauges will be reported:
-# mem.used: This is the used memory (MemTotal - MemFree), either as an absolute number or a fraction of
-#   MemTotal, depending on whether breakdown is "absolute" or "fraction".
+# mem.used: This is the used memory (MemTotal - MemFree - Buffers - Cached), either as an absolute number or a
+#   fraction of MemTotal, depending on whether breakdown is "absolute" or "fraction".
 # mem.cached: This is the memory used for disk cache, either as an absolute number or a fraction of MemTotal.
 [os_stats.mem]
 breakdown = "fraction" # Default is "fraction", if unspecified.

@@ -46,8 +46,10 @@ func reportMemStats() error {
 	if err != nil {
 		return err
 	}
-	total, free, cached := float64(memInfo["MemTotal"]), float64(memInfo["MemFree"]), float64(memInfo["Cached"])
-	used := total - free
+	total := float64(memInfo["MemTotal"])
+	cached := float64(memInfo["Cached"])
+	fmt.Println(memInfo["MemFree"], memInfo["Cached"], memInfo["Buffers"])
+	used := total - cached - float64(memInfo["MemFree"]+memInfo["Buffers"])
 	if conf.OSStats.Mem.Breakdown == "fraction" {
 		used /= total
 		cached /= total
