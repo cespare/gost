@@ -2,11 +2,14 @@ package main
 
 import (
 	"math"
+	"testing"
 
 	. "launchpad.net/gocheck"
 )
 
 // ----------- Gocheck config ----------------
+
+func Test(t *testing.T) { TestingT(t) }
 
 type BufferedStatsSuite struct{}
 
