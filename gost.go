@@ -219,18 +219,14 @@ func aggregateForwarding() {
 
 // flushForwarding pushes forwarding messages to another gost instance.
 func flushForwarding() {
+	conn := DialPConn(conf.ForwardingAddr)
+	defer conn.Close()
 	for msg := range forwardingOutgoing {
 		debugMsg := fmt.Sprintf("<binary forwarding message; len = %d bytes>", len(msg))
 		debugServer.Print("[forward]", []byte(debugMsg))
-		conn, err := net.Dial("tcp", conf.ForwardingAddr)
-		if err != nil {
-			log.Printf("Error: cannot connect to forwarding gost at %s: %s", conf.ForwardingAddr, err)
-			continue
-		}
 		if _, err := conn.Write(msg); err != nil {
-			log.Println("Warning: could not write forwarding message.")
+			log.Printf("Warning: could not write forwarding message to %s: %s", conf.ForwardingAddr, err)
 		}
-		conn.Close()
 	}
 }
 
@@ -263,17 +259,13 @@ func aggregate() {
 
 // flush pushes outgoing messages to graphite.
 func flush() {
+	conn := DialPConn(conf.GraphiteAddr)
+	defer conn.Close()
 	for msg := range outgoing {
 		debugServer.Print("[out] ", msg)
-		conn, err := net.Dial("tcp", conf.GraphiteAddr)
-		if err != nil {
-			log.Printf("Error: cannot connect to graphite at %s: %s", conf.GraphiteAddr, err)
-			continue
-		}
 		if _, err := conn.Write(msg); err != nil {
-			log.Println("Warning: could not write Graphite message.")
+			log.Printf("Warning: could not write message to Graphite at %s: %s", conf.GraphiteAddr, err)
 		}
-		conn.Close()
 	}
 }
 
