@@ -20,6 +20,9 @@ const (
 	// In this case, the total size of buffers for incoming messages is 10e3 * 1000 = 10MB.
 	udpBufSize = 10e3
 	nUDPBufs   = 1000
+
+	// All TCP connections managed by gost have this keepalive duration applied
+	tcpKeepAlivePeriod = 30 * time.Second
 )
 
 var (
@@ -336,6 +339,24 @@ func (s *dServer) Print(tag string, msg []byte) {
 	}
 }
 
+type tcpKeepAliveListener struct {
+	*net.TCPListener
+}
+
+func (l tcpKeepAliveListener) Accept() (net.Conn, error) {
+	c, err := l.AcceptTCP()
+	if err != nil {
+		return nil, err
+	}
+	if err := c.SetKeepAlive(true); err != nil {
+		return nil, err
+	}
+	if err := c.SetKeepAlivePeriod(tcpKeepAlivePeriod); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
 func main() {
 	flag.Parse()
 	parseConf()
@@ -365,10 +386,11 @@ func main() {
 
 	if forwarderEnabled {
 		log.Println("Listening for forwarded gost messages on", conf.ForwarderListenAddr)
-		listener, err := net.Listen("tcp", conf.ForwarderListenAddr)
+		l, err := net.Listen("tcp", conf.ForwarderListenAddr)
 		if err != nil {
 			log.Fatal(err)
 		}
+		listener := tcpKeepAliveListener{l.(*net.TCPListener)}
 		go aggregateForwarded()
 		go func() { log.Fatal(forwardServer(listener)) }()
 	}

@@ -20,7 +20,10 @@ func (c *PConn) connect() error {
 		return err
 	}
 	c.c = conn.(*net.TCPConn)
-	return nil
+	if err := c.c.SetKeepAlivePeriod(tcpKeepAlivePeriod); err != nil {
+		return err
+	}
+	return c.c.SetKeepAlive(true)
 }
 
 func (c *PConn) Write(b []byte) (int, error) {
