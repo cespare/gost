@@ -227,9 +227,12 @@ func flushForwarding() {
 	for msg := range forwardingOutgoing {
 		debugMsg := fmt.Sprintf("<binary forwarding message; len = %d bytes>", len(msg))
 		debugServer.Print("[forward]", []byte(debugMsg))
+		start := time.Now()
 		if _, err := conn.Write(msg); err != nil {
+			metaInc("errors.forwarding_write")
 			log.Printf("Warning: could not write forwarding message to %s: %s", conf.ForwardingAddr, err)
 		}
+		metaTimer("graphite_write", time.Since(start))
 	}
 }
 
@@ -266,9 +269,12 @@ func flush() {
 	defer conn.Close()
 	for msg := range outgoing {
 		debugServer.Print("[out] ", msg)
+		start := time.Now()
 		if _, err := conn.Write(msg); err != nil {
+			metaInc("errors.graphite_write")
 			log.Printf("Warning: could not write message to Graphite at %s: %s", conf.GraphiteAddr, err)
 		}
+		metaTimer("graphite_write", time.Since(start))
 	}
 }
 

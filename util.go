@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"log"
 	"strconv"
+	"time"
 	"unsafe"
 )
 
@@ -34,6 +35,14 @@ func metaCount(name string, value float64) {
 }
 
 func metaInc(name string) { metaCount(name, 1) }
+
+func metaTimer(name string, elapsed time.Duration) {
+	incoming <- &Stat{
+		Type:  StatTimer,
+		Name:  "gost." + name,
+		Value: elapsed.Seconds() * 1000,
+	}
+}
 
 func isSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\r' || c == '\n'
