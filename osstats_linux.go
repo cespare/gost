@@ -248,33 +248,33 @@ func checkOSStats() {
 }
 
 func reportOSStats() {
-	start := time.Now()
+	//start := time.Now()
 	defer func() {
-		elapsed := time.Since(start)
+		//elapsed := time.Since(start)
 		// Use a counter here instead of the full expense of a timer.
-		metaCount("os_stats_check_duration_ms", elapsed.Seconds()*1000)
+		//metaCount("os_stats_check_duration_ms", elapsed.Seconds()*1000)
 	}()
 	if conf.OSStats.Mem != nil {
 		if err := reportMemStats(); err != nil {
-			metaInc("errors.os_stats_mem_check")
+			//metaInc("errors.os_stats_mem_check")
 			dbg.Println("mem stats check failure:", err)
 		}
 	}
 	if conf.OSStats.CPU != nil {
 		if err := reportCPUStats(); err != nil {
-			metaInc("errors.os_stats_cpu_check")
+			//metaInc("errors.os_stats_cpu_check")
 			dbg.Println("cpu stats check failure:", err)
 		}
 	}
 	if conf.OSStats.Net != nil {
 		if err := reportNetStats(); err != nil {
-			metaInc("errors.os_stats_net_check")
+			//metaInc("errors.os_stats_net_check")
 			dbg.Println("net stats check failure:", err)
 		}
 	}
 	if conf.OSStats.Disk != nil {
 		if err := reportDiskStats(); err != nil {
-			metaInc("errors.os_stats_disk_check")
+			//metaInc("errors.os_stats_disk_check")
 			dbg.Println("disk stats check failure:", err)
 		}
 	}
