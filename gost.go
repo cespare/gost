@@ -222,21 +222,17 @@ func aggregateForwarding() {
 
 // flushForwarding pushes forwarding messages to another gost instance.
 func flushForwarding() {
+	conn := DialPConn(conf.ForwardingAddr)
+	defer conn.Close()
 	for msg := range forwardingOutgoing {
 		debugMsg := fmt.Sprintf("<binary forwarding message; len = %d bytes>", len(msg))
 		debugServer.Print("[forward]", []byte(debugMsg))
 		start := time.Now()
-		conn, err := net.Dial("tcp", conf.ForwardingAddr)
-		if err != nil {
-			log.Printf("Could not connect to forwarder at %s: %s", conf.ForwardingAddr, err)
-			continue
-		}
 		if _, err := conn.Write(msg); err != nil {
 			metaInc("errors.forwarding_write")
 			log.Printf("Warning: could not write forwarding message to %s: %s", conf.ForwardingAddr, err)
 		}
-		metaTimer("forwarding_write", time.Since(start))
-		conn.Close()
+		metaTimer("graphite_write", time.Since(start))
 	}
 }
 
