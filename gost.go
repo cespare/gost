@@ -116,12 +116,12 @@ func handleMessage(msg []byte) {
 	stat, ok := parseStatsdMessage(msg)
 	if !ok {
 		log.Println("bad message:", string(msg))
-		//metaInc("errors.bad_message")
+		metaInc("errors.bad_message")
 		return
 	}
 	if stat.Forward {
 		if stat.Type != StatCounter {
-			//metaInc("errors.bad_metric_type_for_forwarding")
+			metaInc("errors.bad_metric_type_for_forwarding")
 			return
 		}
 		forwardingIncoming <- stat
@@ -138,9 +138,9 @@ func clientServer(c *net.UDPConn) error {
 		if err != nil {
 			return err
 		}
-		//metaInc("packets_received")
+		metaInc("packets_received")
 		if n >= udpBufSize {
-			//metaInc("errors.udp_message_too_large")
+			metaInc("errors.udp_message_too_large")
 			continue
 		}
 		go handleMessages(buf[:n])
@@ -173,7 +173,7 @@ func handleForwarded(c net.Conn) {
 				return
 			}
 			log.Println("Error reading forwarded message:", err)
-			//metaInc("errors.forwarded_message_read")
+			metaInc("errors.forwarded_message_read")
 			return
 		}
 		forwarderIncoming <- &BufferedStats{Counts: counts}
@@ -225,17 +225,17 @@ func flushForwarding() {
 	for msg := range forwardingOutgoing {
 		debugMsg := fmt.Sprintf("<binary forwarding message; len = %d bytes>", len(msg))
 		debugServer.Print("[forward]", []byte(debugMsg))
-		//start := time.Now()
+		start := time.Now()
 		conn, err := net.Dial("tcp", conf.ForwardingAddr)
 		if err != nil {
 			log.Printf("Could not connect to forwarder at %s: %s", conf.ForwardingAddr, err)
 			continue
 		}
 		if _, err := conn.Write(msg); err != nil {
-			//metaInc("errors.forwarding_write")
+			metaInc("errors.forwarding_write")
 			log.Printf("Warning: could not write forwarding message to %s: %s", conf.ForwardingAddr, err)
 		}
-		//metaTimer("forwarding_write", time.Since(start))
+		metaTimer("forwarding_write", time.Since(start))
 		conn.Close()
 	}
 }
@@ -273,12 +273,12 @@ func flush() {
 	defer conn.Close()
 	for msg := range outgoing {
 		debugServer.Print("[out] ", msg)
-		//start := time.Now()
+		start := time.Now()
 		if _, err := conn.Write(msg); err != nil {
-			//metaInc("errors.graphite_write")
+			metaInc("errors.graphite_write")
 			log.Printf("Warning: could not write message to Graphite at %s: %s", conf.GraphiteAddr, err)
 		}
-		//metaTimer("graphite_write", time.Since(start))
+		metaTimer("graphite_write", time.Since(start))
 	}
 }
 
