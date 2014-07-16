@@ -3,64 +3,52 @@ package main
 import (
 	"math"
 	"testing"
-
-	. "launchpad.net/gocheck"
 )
 
-// ----------- Gocheck config ----------------
-
-func Test(t *testing.T) { TestingT(t) }
-
-type BufferedStatsSuite struct{}
-
-var _ = Suite(&BufferedStatsSuite{})
-
-// ----------- Tests ----------------
-
-func (*BufferedStatsSuite) TestCounter(c *C) {
+func TestBufferedStatsCounter(t *testing.T) {
 	s := NewBufferedStats(2000)
 	s.AddCount("foo", 1)
 	s.AddCount("foo", 3)
 	r := s.computeDerived()
-	c.Check(r["count"]["foo"], approx, 4.0)
-	c.Check(r["rate"]["foo"], approx, 2.0)
+	approx(t, r["count"]["foo"], 4.0)
+	approx(t, r["rate"]["foo"], 2.0)
 }
 
-func (*BufferedStatsSuite) TestGauge(c *C) {
+func TestBufferedStatsGauge(t *testing.T) {
 	s := NewBufferedStats(2000)
 	s.SetGauge("foo", 10)
 	s.SetGauge("foo", 20)
 	r := s.computeDerived()
-	c.Check(r["gauge"]["foo"], approx, 20.0)
+	approx(t, r["gauge"]["foo"], 20.0)
 }
 
-func (*BufferedStatsSuite) TestSet(c *C) {
+func TestBufferedStatsSet(t *testing.T) {
 	s := NewBufferedStats(2000)
 	s.AddSetItem("foo", 123)
 	s.AddSetItem("foo", 123)
 	s.AddSetItem("foo", 456)
 	r := s.computeDerived()
-	c.Check(r["set"]["foo"], approx, 2.0)
+	approx(t, r["set"]["foo"], 2.0)
 }
 
-func (*BufferedStatsSuite) TestTimer(c *C) {
+func TestBufferedStatsTimer(t *testing.T) {
 	s := NewBufferedStats(2000)
 	s.RecordTimer("foo", 100.0)
 	s.RecordTimer("foo", 600.0)
 	s.RecordTimer("foo", 200.0)
 	r := s.computeDerived()
-	c.Check(r["timer.count"]["foo"], approx, 3.0)
-	c.Check(r["timer.rate"]["foo"], approx, 1.5)
-	c.Check(r["timer.sum"]["foo"], approx, 900.0)
-	c.Check(r["timer.mean"]["foo"], approx, 300.0)
-	c.Check(r["timer.stdev"]["foo"], approx, math.Sqrt((200.0*200.0+300.0*300.0+100.0*100.0)/3))
-	c.Check(r["timer.min"]["foo"], approx, 100.0)
-	c.Check(r["timer.max"]["foo"], approx, 600.0)
-	c.Check(r["timer.median"]["foo"], approx, 200.0)
+	approx(t, r["timer.count"]["foo"], 3.0)
+	approx(t, r["timer.rate"]["foo"], 1.5)
+	approx(t, r["timer.sum"]["foo"], 900.0)
+	approx(t, r["timer.mean"]["foo"], 300.0)
+	approx(t, r["timer.stdev"]["foo"], math.Sqrt((200.0*200.0+300.0*300.0+100.0*100.0)/3))
+	approx(t, r["timer.min"]["foo"], 100.0)
+	approx(t, r["timer.max"]["foo"], 500.0)
+	approx(t, r["timer.median"]["foo"], 200.0)
 
 	s = NewBufferedStats(2000)
 	s.RecordTimer("bar", 100.0)
 	s.RecordTimer("bar", 200.0)
 	r = s.computeDerived()
-	c.Check(r["timer.median"]["bar"], approx, 150.0)
+	approx(t, r["timer.median"]["bar"], 150.0)
 }

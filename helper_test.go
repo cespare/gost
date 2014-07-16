@@ -1,33 +1,24 @@
 package main
 
 import (
-	. "launchpad.net/gocheck"
+	"path/filepath"
+	"runtime"
+	"testing"
 )
 
-// approx is a gocheck checker for approximate equality of floats.
-// Note that approximate equality of floats is a fraught topic. This is a very naive comparison.
-type approxChecker struct {
-	*CheckerInfo
-}
-
-var approx = &approxChecker{
-	&CheckerInfo{Name: "approx", Params: []string{"obtained", "expected"}},
-}
-
-func (c *approxChecker) Check(params []interface{}, names []string) (result bool, error string) {
-	f1, ok1 := params[0].(float64)
-	f2, ok2 := params[1].(float64)
-	if !(ok1 && ok2) {
-		return false, "must compare float64s"
-	}
+// approx tests approximate equality of floats.
+// Note that this is a fraught topic. This is a very naive comparison.
+func approx(t testing.TB, got, want float64) {
+	f1 := got
+	f2 := want
 	if f1 == f2 {
-		return true, ""
+		return
 	} else if f1 > f2 {
 		f1, f2 = f2, f1
 	}
 	delta := (f2 - f1) / f1
-	if delta < 0.0001 { // Accept f2 up to 0.01% greater than f1
-		return true, ""
+	if delta > 0.0001 { // Accept want up to 0.01% greater than got
+		_, file, line, _ := runtime.Caller(1)
+		t.Fatalf("\r\t%s:%d: got %v; want %v", filepath.Base(file), line, got, want)
 	}
-	return false, ""
 }
