@@ -39,6 +39,8 @@ type Server struct {
 
 	bufPool chan []byte // pool of buffers for incoming messages
 
+	metaStats chan *Stat
+
 	incoming chan *Stat  // incoming stats are passed to the aggregator
 	outgoing chan []byte // outgoing Graphite messages
 
@@ -70,6 +72,7 @@ func NewServer(conf *Conf) *Server {
 		conf:            conf,
 		l:               logger,
 		bufPool:         make(chan []byte, nUDPBufs),
+		metaStats:       make(chan *Stat),
 		incoming:        make(chan *Stat, incomingQueueSize),
 		outgoing:        make(chan []byte),
 		stats:           NewBufferedStats(conf.FlushIntervalMS),
@@ -100,6 +103,7 @@ func NewServer(conf *Conf) *Server {
 }
 
 func (s *Server) Listen() error {
+	go s.handleMetaStats()
 	go s.flush()
 	go s.aggregate()
 	if s.conf.OSStats != nil {
@@ -329,6 +333,7 @@ func (s *Server) flushForwarding() {
 func (s *Server) aggregate() {
 	ticker := s.aggregateFlushTicker()
 	for {
+		time.Sleep(time.Second)
 		select {
 		case stat := <-s.incoming:
 			key := stat.Name
@@ -363,26 +368,6 @@ func (s *Server) flush() {
 			s.l.Printf("Warning: could not write message to Graphite at %s: %s", s.conf.GraphiteAddr, err)
 		}
 		s.metaTimer("graphite_write", time.Since(start))
-	}
-}
-
-// metaCount advances a counter for an internal gost stat.
-func (s *Server) metaCount(name string, value float64) {
-	s.incoming <- &Stat{
-		Type:       StatCounter,
-		Name:       "gost." + name,
-		Value:      value,
-		SampleRate: 1.0,
-	}
-}
-
-func (s *Server) metaInc(name string) { s.metaCount(name, 1) }
-
-func (s *Server) metaTimer(name string, elapsed time.Duration) {
-	s.incoming <- &Stat{
-		Type:  StatTimer,
-		Name:  "gost." + name,
-		Value: elapsed.Seconds() * 1000,
 	}
 }
 
