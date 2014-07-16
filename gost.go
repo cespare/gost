@@ -254,6 +254,7 @@ func (s *Server) aggregateForwarded() {
 }
 
 func (s *Server) handleForwarded(c net.Conn) {
+	defer c.Close()
 	decoder := gob.NewDecoder(c)
 	for {
 		var counts map[string]float64
@@ -270,6 +271,7 @@ func (s *Server) handleForwarded(c net.Conn) {
 }
 
 func (s *Server) forwardServer(listener net.Listener) error {
+	defer listener.Close()
 	for {
 		c, err := listener.Accept()
 		if err != nil {
