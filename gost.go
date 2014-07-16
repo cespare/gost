@@ -8,8 +8,11 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/cespare/gost/internal/llog"
 )
 
 const (
@@ -26,41 +29,125 @@ const (
 )
 
 var (
-	configFile = flag.String("conf", "conf.toml", "TOML configuration file")
-	conf       *Conf
+	configFile       = flag.String("conf", "conf.toml", "TOML configuration file")
+	forwardKeyPrefix = []byte("f|")
+)
 
-	bufPool = make(chan []byte, nUDPBufs) // pool of buffers for incoming messagse
+type Server struct {
+	conf *Conf
+	l    *llog.Logger
 
-	incoming = make(chan *Stat, incomingQueueSize) // incoming stats are passed to the aggregator
-	outgoing = make(chan []byte)                   // outgoing Graphite messages
+	bufPool chan []byte // pool of buffers for incoming messages
 
-	stats = NewBufferedStats()
+	incoming chan *Stat  // incoming stats are passed to the aggregator
+	outgoing chan []byte // outgoing Graphite messages
 
-	forwardingEnabled  bool                 // Whether configured to forward to another gost
-	forwardingStats    = NewBufferedStats() // Counters to be forwarded
-	forwardKeyPrefix   = []byte("f|")
-	forwardingIncoming chan *Stat          // incoming messages to be forwarded
-	forwardingOutgoing = make(chan []byte) // outgoing forwarded messages
+	stats *BufferedStats
 
-	// Whether configured to receive forwarded messages
-	forwarderEnabled  bool
-	forwarderIncoming = make(chan *BufferedStats, incomingQueueSize) // incoming forwarded messages
-	forwardedStats    = NewBufferedStats()
+	forwardingStats    *BufferedStats // Counters to be forwarded
+	forwardingIncoming chan *Stat     // Incoming messages to be forwarded
+	forwardingOutgoing chan []byte    // Outgoing forwarded messages
 
-	debugServer = &dServer{}
+	forwarderIncoming chan *BufferedStats // incoming forwarded messages
+	forwardedStats    *BufferedStats
+
+	debugServer *dServer
 
 	// The flushTickers and now are functions that the tests can stub out.
 	aggregateFlushTicker           func() <-chan time.Time
 	aggregateForwardedFlushTicker  func() <-chan time.Time
 	aggregateForwardingFlushTicker func() <-chan time.Time
-	now                            func() time.Time = time.Now
-)
+	now                            func() time.Time
 
-func init() {
+	// Used for any storage the platform-specific os stats checking needs.
+	osData OSData
+}
+
+func NewServer(conf *Conf) *Server {
+	// TODO: May want to make this configurable later.
+	logger := llog.NewLogger(log.New(os.Stdout, "", log.LstdFlags), conf.DebugLogging)
+	s := &Server{
+		conf:            conf,
+		l:               logger,
+		bufPool:         make(chan []byte, nUDPBufs),
+		incoming:        make(chan *Stat, incomingQueueSize),
+		outgoing:        make(chan []byte),
+		stats:           NewBufferedStats(conf.FlushIntervalMS),
+		forwardingStats: NewBufferedStats(conf.FlushIntervalMS),
+		// Having forwardingIncoming be nil when forwarding is not enabled ensures that gost will crash fast if
+		// somehow messages are interpreted as forwarded messages even when forwarding is turned off (which should
+		// never happen). Otherwise the behavior would be to fill up the queue and then deadlock.
+		forwardingIncoming: nil,
+		forwardingOutgoing: make(chan []byte),
+		forwarderIncoming:  make(chan *BufferedStats, incomingQueueSize),
+		forwardedStats:     NewBufferedStats(conf.FlushIntervalMS),
+		debugServer:        &dServer{l: logger},
+		now:                time.Now,
+	}
+	s.InitOSData()
 	// Preallocate the UDP buffer pool
 	for i := 0; i < nUDPBufs; i++ {
-		bufPool <- make([]byte, udpBufSize)
+		s.bufPool <- make([]byte, udpBufSize)
 	}
+
+	s.aggregateFlushTicker = func() <-chan time.Time {
+		return time.NewTicker(time.Duration(s.conf.FlushIntervalMS) * time.Millisecond).C
+	}
+	s.aggregateForwardedFlushTicker = s.aggregateFlushTicker
+	s.aggregateForwardingFlushTicker = s.aggregateFlushTicker
+
+	return s
+}
+
+func (s *Server) Listen() error {
+	go s.flush()
+	go s.aggregate()
+	if s.conf.OSStats != nil {
+		go s.checkOSStats()
+	}
+	if s.conf.Scripts != nil {
+		go s.runScripts()
+	}
+
+	if s.conf.forwardingEnabled {
+		s.forwardingIncoming = make(chan *Stat, incomingQueueSize)
+		go s.flushForwarding()
+		go s.aggregateForwarding()
+	}
+
+	errorCh := make(chan error)
+	if s.conf.forwarderEnabled {
+		s.l.Println("Listening for forwarded gost messages on", s.conf.ForwarderListenAddr)
+		l, err := net.Listen("tcp", s.conf.ForwarderListenAddr)
+		if err != nil {
+			return err
+		}
+		listener := tcpKeepAliveListener{l.(*net.TCPListener)}
+		go s.aggregateForwarded()
+		go func() {
+			errorCh <- s.forwardServer(listener)
+		}()
+	}
+
+	if err := s.debugServer.Start(s.conf.DebugPort); err != nil {
+		return err
+	}
+
+	udpAddr := fmt.Sprintf("localhost:%d", s.conf.Port)
+	udp, err := net.ResolveUDPAddr("udp", udpAddr)
+	if err != nil {
+		return err
+	}
+	s.l.Println("Listening for UDP client requests on", udp)
+	conn, err := net.ListenUDP("udp", udp)
+	if err != nil {
+		return err
+	}
+	go func() {
+		errorCh <- s.clientServer(conn)
+	}()
+
+	return <-errorCh
 }
 
 type StatType int
@@ -81,7 +168,6 @@ type Stat struct {
 }
 
 // tagToStatType maps a tag (e.g., []byte("c")) to a StatType (e.g., StatCounter).
-// NOTE: This used to be a map[string]StatType but was changed for performance reasons.
 func tagToStatType(b []byte) (StatType, bool) {
 	switch len(b) {
 	case 1:
@@ -101,70 +187,69 @@ func tagToStatType(b []byte) (StatType, bool) {
 	return 0, false
 }
 
-func handleMessages(buf []byte) {
+func (s *Server) handleMessages(buf []byte) {
 	for _, msg := range bytes.Split(buf, []byte{'\n'}) {
-		handleMessage(msg)
+		s.handleMessage(msg)
 	}
-	bufPool <- buf[:cap(buf)] // Reset buf's length and return to the pool
+	s.bufPool <- buf[:cap(buf)] // Reset buf's length and return to the pool
 }
 
-func handleMessage(msg []byte) {
+func (s *Server) handleMessage(msg []byte) {
 	if len(msg) == 0 {
 		return
 	}
-	debugServer.Print("[in] ", msg)
-	stat, ok := parseStatsdMessage(msg)
+	s.debugServer.Print("[in] ", msg)
+	stat, ok := parseStatsdMessage(msg, s.conf.forwardingEnabled)
 	if !ok {
-		log.Println("bad message:", string(msg))
-		metaInc("errors.bad_message")
+		s.l.Println("bad message:", string(msg))
+		s.metaInc("errors.bad_message")
 		return
 	}
 	if stat.Forward {
 		if stat.Type != StatCounter {
-			metaInc("errors.bad_metric_type_for_forwarding")
+			s.metaInc("errors.bad_metric_type_for_forwarding")
 			return
 		}
-		forwardingIncoming <- stat
+		s.forwardingIncoming <- stat
 	} else {
-		incoming <- stat
+		s.incoming <- stat
 	}
 }
 
-func clientServer(c *net.UDPConn) error {
+func (s *Server) clientServer(c *net.UDPConn) error {
 	for {
-		buf := <-bufPool
+		buf := <-s.bufPool
 		n, _, err := c.ReadFromUDP(buf)
-		// TODO: Should we try to recover from such errors?
 		if err != nil {
 			return err
 		}
-		metaInc("packets_received")
+		s.metaInc("packets_received")
 		if n >= udpBufSize {
-			metaInc("errors.udp_message_too_large")
+			s.metaInc("errors.udp_message_too_large")
 			continue
 		}
-		go handleMessages(buf[:n])
+		go s.handleMessages(buf[:n])
 	}
 }
 
 // aggregateForwarded merges forwarded gost messages.
-func aggregateForwarded() {
-	ticker := aggregateForwardedFlushTicker()
+func (s *Server) aggregateForwarded() {
+	ticker := s.aggregateForwardedFlushTicker()
 	for {
 		select {
-		case count := <-forwarderIncoming:
-			forwardedStats.Merge(count)
+		case count := <-s.forwarderIncoming:
+			s.forwardedStats.Merge(count)
 		case <-ticker:
-			n, msg := forwardedStats.CreateGraphiteMessage(conf.ForwardedNamespace,
-				"distinct_forwarded_metrics_flushed")
-			dbg.Printf("Sending %d forwarded stat(s) to graphite.", n)
-			outgoing <- msg
-			forwardedStats.Clear(!conf.ClearStatsBetweenFlushes)
+			n, msg := s.forwardedStats.CreateGraphiteMessage(s.conf.ForwardedNamespace,
+				"distinct_forwarded_metrics_flushed", s.now())
+			s.l.Debugf("Sending %d forwarded stat(s) to graphite.", n)
+			s.outgoing <- msg
+			s.forwardedStats.Clear(!s.conf.ClearStatsBetweenFlushes)
 		}
 	}
 }
 
-func handleForwarded(c net.Conn) {
+func (s *Server) handleForwarded(c net.Conn) {
 	decoder := gob.NewDecoder(c)
 	for {
 		var counts map[string]float64
@@ -172,121 +257,145 @@ func handleForwarded(c net.Conn) {
 			if err == io.EOF {
 				return
 			}
-			log.Println("Error reading forwarded message:", err)
-			metaInc("errors.forwarded_message_read")
+			s.l.Println("Error reading forwarded message:", err)
+			s.metaInc("errors.forwarded_message_read")
 			return
 		}
-		forwarderIncoming <- &BufferedStats{Counts: counts}
+		s.forwarderIncoming <- &BufferedStats{Counts: counts}
 	}
 }
 
-func forwardServer(listener net.Listener) error {
+func (s *Server) forwardServer(listener net.Listener) error {
 	for {
 		c, err := listener.Accept()
 		if err != nil {
 			if e, ok := err.(net.Error); ok && e.Temporary() {
 				delay := 10 * time.Millisecond
-				log.Printf("Accept error: %v; retrying in %v", e, delay)
+				s.l.Printf("Accept error: %v; retrying in %v", e, delay)
 				time.Sleep(delay)
 				continue
 			}
 			return err
 		}
-		go handleForwarded(c)
+		go s.handleForwarded(c)
 	}
 }
 
 // aggregateForwarding reads incoming forward messages and aggregates them. Every flush interval it forwards
 // the collected stats.
-func aggregateForwarding() {
-	ticker := aggregateForwardingFlushTicker()
+func (s *Server) aggregateForwarding() {
+	ticker := s.aggregateForwardingFlushTicker()
 	for {
 		select {
-		case stat := <-forwardingIncoming:
+		case stat := <-s.forwardingIncoming:
 			if stat.Type == StatCounter {
-				forwardingStats.AddCount(stat.Name, stat.Value/stat.SampleRate)
+				s.forwardingStats.AddCount(stat.Name, stat.Value/stat.SampleRate)
 			}
 		case <-ticker:
-			n, msg := forwardingStats.CreateForwardMessage()
+			n, msg, err := s.forwardingStats.CreateForwardMessage()
+			if err != nil {
+				s.l.Debugln("Error: Could not serialize forwarded message:", err)
+			}
 			if n > 0 {
-				dbg.Printf("Forwarding %d stat(s).", n)
-				forwardingOutgoing <- msg
+				s.l.Debugf("Forwarding %d stat(s).", n)
+				s.forwardingOutgoing <- msg
 			} else {
-				dbg.Println("No stats to forward.")
+				s.l.Debugln("No stats to forward.")
 			}
 			// Always delete forwarded stats -- they are cleared/preserved between flushes at the receiving end.
-			forwardingStats.Clear(false)
+			s.forwardingStats.Clear(false)
 		}
 	}
 }
 
 // flushForwarding pushes forwarding messages to another gost instance.
-func flushForwarding() {
-	conn := DialPConn(conf.ForwardingAddr)
+func (s *Server) flushForwarding() {
+	conn := DialPConn(s.conf.ForwardingAddr)
 	defer conn.Close()
-	for msg := range forwardingOutgoing {
+	for msg := range s.forwardingOutgoing {
 		debugMsg := fmt.Sprintf("<binary forwarding message; len = %d bytes>", len(msg))
-		debugServer.Print("[forward]", []byte(debugMsg))
+		s.debugServer.Print("[forward]", []byte(debugMsg))
 		start := time.Now()
 		if _, err := conn.Write(msg); err != nil {
-			metaInc("errors.forwarding_write")
-			log.Printf("Warning: could not write forwarding message to %s: %s", conf.ForwardingAddr, err)
+			s.metaInc("errors.forwarding_write")
+			s.l.Printf("Warning: could not write forwarding message to %s: %s", s.conf.ForwardingAddr, err)
 		}
-		metaTimer("graphite_write", time.Since(start))
+		s.metaTimer("graphite_write", time.Since(start))
 	}
 }
 
 // aggregate reads the incoming messages and aggregates them. It sends them to be flushed every flush
 // interval.
-func aggregate() {
-	ticker := aggregateFlushTicker()
+func (s *Server) aggregate() {
+	ticker := s.aggregateFlushTicker()
 	for {
 		select {
-		case stat := <-incoming:
+		case stat := <-s.incoming:
 			key := stat.Name
 			switch stat.Type {
 			case StatCounter:
-				stats.AddCount(key, stat.Value/stat.SampleRate)
+				s.stats.AddCount(key, stat.Value/stat.SampleRate)
 			case StatSet:
-				stats.AddSetItem(key, stat.Value)
+				s.stats.AddSetItem(key, stat.Value)
 			case StatGauge:
-				stats.SetGauge(key, stat.Value)
+				s.stats.SetGauge(key, stat.Value)
 			case StatTimer:
-				stats.RecordTimer(key, stat.Value)
+				s.stats.RecordTimer(key, stat.Value)
 			}
 		case <-ticker:
-			n, msg := stats.CreateGraphiteMessage(conf.Namespace, "distinct_metrics_flushed")
-			dbg.Printf("Flushing %d stat(s).", n)
-			outgoing <- msg
-			stats.Clear(!conf.ClearStatsBetweenFlushes)
+			n, msg := s.stats.CreateGraphiteMessage(s.conf.Namespace, "distinct_metrics_flushed", s.now())
+			s.l.Debugf("Flushing %d stat(s).", n)
+			s.outgoing <- msg
+			s.stats.Clear(!s.conf.ClearStatsBetweenFlushes)
 		}
 	}
 }
 
 // flush pushes outgoing messages to graphite.
-func flush() {
-	conn := DialPConn(conf.GraphiteAddr)
+func (s *Server) flush() {
+	conn := DialPConn(s.conf.GraphiteAddr)
 	defer conn.Close()
-	for msg := range outgoing {
-		debugServer.Print("[out] ", msg)
+	for msg := range s.outgoing {
+		s.debugServer.Print("[out] ", msg)
 		start := time.Now()
 		if _, err := conn.Write(msg); err != nil {
-			metaInc("errors.graphite_write")
-			log.Printf("Warning: could not write message to Graphite at %s: %s", conf.GraphiteAddr, err)
+			s.metaInc("errors.graphite_write")
+			s.l.Printf("Warning: could not write message to Graphite at %s: %s", s.conf.GraphiteAddr, err)
 		}
-		metaTimer("graphite_write", time.Since(start))
+		s.metaTimer("graphite_write", time.Since(start))
+	}
+}
+
+// metaCount advances a counter for an internal gost stat.
+func (s *Server) metaCount(name string, value float64) {
+	s.incoming <- &Stat{
+		Type:       StatCounter,
+		Name:       "gost." + name,
+		Value:      value,
+		SampleRate: 1.0,
+	}
+}
+
+func (s *Server) metaInc(name string) { s.metaCount(name, 1) }
+
+func (s *Server) metaTimer(name string, elapsed time.Duration) {
+	s.incoming <- &Stat{
+		Type:  StatTimer,
+		Name:  "gost." + name,
+		Value: elapsed.Seconds() * 1000,
 	}
 }
 
 // dServer listens on a local tcp port and prints out debugging info to clients that connect.
 type dServer struct {
+	l *llog.Logger
 	sync.Mutex
 	Clients []net.Conn
 }
 
 func (s *dServer) Start(port int) error {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	log.Println("Listening for debug TCP clients on", addr)
+	s.l.Println("Listening for debug TCP clients on", addr)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -299,7 +408,7 @@ func (s *dServer) Start(port int) error {
 			}
 			s.Lock()
 			s.Clients = append(s.Clients, c)
-			dbg.Printf("Debug client connected. Currently %d connected client(s).", len(s.Clients))
+			s.l.Debugf("Debug client connected. Currently %d connected client(s).", len(s.Clients))
 			s.Unlock()
 		}
 	}()
@@ -311,7 +420,7 @@ func (s *dServer) closeClient(client net.Conn) {
 		if c == client {
 			s.Clients = append(s.Clients[:i], s.Clients[i+1:]...)
 			client.Close()
-			dbg.Printf("Debug client disconnected. Currently %d connected client(s).", len(s.Clients))
+			s.l.Debugf("Debug client disconnected. Currently %d connected client(s).", len(s.Clients))
 			return
 		}
 	}
@@ -365,55 +474,9 @@ func (l tcpKeepAliveListener) Accept() (net.Conn, error) {
 
 func main() {
 	flag.Parse()
-	parseConf()
-	aggregateFlushTicker = func() <-chan time.Time {
-		return time.NewTicker(time.Duration(conf.FlushIntervalMS) * time.Millisecond).C
-	}
-	aggregateForwardedFlushTicker = aggregateFlushTicker
-	aggregateForwardingFlushTicker = aggregateFlushTicker
-
-	go flush()
-	go aggregate()
-	if conf.OSStats != nil {
-		go checkOSStats()
-	}
-	if conf.Scripts != nil {
-		go runScripts()
-	}
-
-	if forwardingEnabled {
-		// Having forwardingIncoming be nil when forwarding is not enabled ensures that gost will crash fast if
-		// somehow messages are interpreted as forwarded messages even when forwarding is turned off (which should
-		// never happen). Otherwise the behavior would be to fill up the queue and then deadlock.
-		forwardingIncoming = make(chan *Stat, incomingQueueSize)
-		go flushForwarding()
-		go aggregateForwarding()
-	}
-
-	if forwarderEnabled {
-		log.Println("Listening for forwarded gost messages on", conf.ForwarderListenAddr)
-		l, err := net.Listen("tcp", conf.ForwarderListenAddr)
-		if err != nil {
-			log.Fatal(err)
-		}
-		listener := tcpKeepAliveListener{l.(*net.TCPListener)}
-		go aggregateForwarded()
-		go func() { log.Fatal(forwardServer(listener)) }()
-	}
-
-	if err := debugServer.Start(conf.DebugPort); err != nil {
-		log.Fatal(err)
-	}
-
-	udpAddr := fmt.Sprintf("localhost:%d", conf.Port)
-	udp, err := net.ResolveUDPAddr("udp", udpAddr)
+	conf, err := parseConf()
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Listening for UDP client requests on", udp)
-	conn, err := net.ListenUDP("udp", udp)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Fatal(clientServer(conn))
+	log.Fatal(NewServer(conf).Listen())
 }

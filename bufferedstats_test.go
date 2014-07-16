@@ -15,18 +15,10 @@ type BufferedStatsSuite struct{}
 
 var _ = Suite(&BufferedStatsSuite{})
 
-// ----------- Setup ----------------
-
-func (*BufferedStatsSuite) SetUpTest(c *C) {
-	conf = &Conf{
-		FlushIntervalMS: 2000,
-	}
-}
-
 // ----------- Tests ----------------
 
 func (*BufferedStatsSuite) TestCounter(c *C) {
-	s := NewBufferedStats()
+	s := NewBufferedStats(2000)
 	s.AddCount("foo", 1)
 	s.AddCount("foo", 3)
 	r := s.computeDerived()
@@ -35,7 +27,7 @@ func (*BufferedStatsSuite) TestCounter(c *C) {
 }
 
 func (*BufferedStatsSuite) TestGauge(c *C) {
-	s := NewBufferedStats()
+	s := NewBufferedStats(2000)
 	s.SetGauge("foo", 10)
 	s.SetGauge("foo", 20)
 	r := s.computeDerived()
@@ -43,7 +35,7 @@ func (*BufferedStatsSuite) TestGauge(c *C) {
 }
 
 func (*BufferedStatsSuite) TestSet(c *C) {
-	s := NewBufferedStats()
+	s := NewBufferedStats(2000)
 	s.AddSetItem("foo", 123)
 	s.AddSetItem("foo", 123)
 	s.AddSetItem("foo", 456)
@@ -52,7 +44,7 @@ func (*BufferedStatsSuite) TestSet(c *C) {
 }
 
 func (*BufferedStatsSuite) TestTimer(c *C) {
-	s := NewBufferedStats()
+	s := NewBufferedStats(2000)
 	s.RecordTimer("foo", 100.0)
 	s.RecordTimer("foo", 600.0)
 	s.RecordTimer("foo", 200.0)
@@ -66,7 +58,7 @@ func (*BufferedStatsSuite) TestTimer(c *C) {
 	c.Check(r["timer.max"]["foo"], approx, 600.0)
 	c.Check(r["timer.median"]["foo"], approx, 200.0)
 
-	s = NewBufferedStats()
+	s = NewBufferedStats(2000)
 	s.RecordTimer("bar", 100.0)
 	s.RecordTimer("bar", 200.0)
 	r = s.computeDerived()

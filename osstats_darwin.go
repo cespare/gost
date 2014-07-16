@@ -2,4 +2,7 @@ package main
 
 // No OS stats implemented for Darwin.
 
-func checkOSStats() {}
+type OSData struct{}
+
+func (s *Server) InitOSData()   {}
+func (s *Server) checkOSStats() {}

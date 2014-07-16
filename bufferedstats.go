@@ -6,25 +6,28 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"time"
 )
 
 type BufferedStats struct {
-	Counts map[string]float64
-	Gauges map[string]float64
-	Sets   map[string]map[float64]struct{}
-	Timers map[string][]float64
+	FlushIntervalMS int
+	Counts          map[string]float64
+	Gauges          map[string]float64
+	Sets            map[string]map[float64]struct{}
+	Timers          map[string][]float64
 
 	// When clear_stats_between_flushes = false, this is used to preserve {count, gauge, set} names between
 	// flushes.
 	PersistentKeys map[string]map[string]struct{}
 }
 
-func NewBufferedStats() *BufferedStats {
+func NewBufferedStats(flushIntervalMS int) *BufferedStats {
 	return &BufferedStats{
-		Counts: make(map[string]float64),
-		Gauges: make(map[string]float64),
-		Sets:   make(map[string]map[float64]struct{}),
-		Timers: make(map[string][]float64),
+		FlushIntervalMS: flushIntervalMS,
+		Counts:          make(map[string]float64),
+		Gauges:          make(map[string]float64),
+		Sets:            make(map[string]map[float64]struct{}),
+		Timers:          make(map[string][]float64),
 		PersistentKeys: map[string]map[string]struct{}{
 			"count": make(map[string]struct{}),
 			"rate":  make(map[string]struct{}),
@@ -75,7 +78,7 @@ func (c *BufferedStats) computeDerived() map[string]map[string]float64 {
 	}
 
 	// Compute the per-second rate for each counter
-	rateFactor := float64(conf.FlushIntervalMS) / 1000
+	rateFactor := float64(c.FlushIntervalMS) / 1000
 	for key, value := range c.Counts {
 		result["rate"][key] = value / rateFactor
 	}
@@ -134,34 +137,35 @@ func (c *BufferedStats) computeDerived() map[string]map[string]float64 {
 // CreateForwardMessage buffers up stats for forwarding to another gost instance. Right now it only serializes
 // the counts, because they are all that may be forwarded.
 // TODO: We could switch to a simple binary wire format to avoid reflection if gob ends up being a bottleneck.
-func (c *BufferedStats) CreateForwardMessage() (n int, msg []byte) {
+func (c *BufferedStats) CreateForwardMessage() (n int, msg []byte, err error) {
 	buf := &bytes.Buffer{}
 	encoder := gob.NewEncoder(buf)
 	if err := encoder.Encode(c.Counts); err != nil {
-		dbg.Println("Error: Could not serialize forwarded message:", err)
-		return 0, nil
+		return 0, nil, err
 	}
-	return len(c.Counts), buf.Bytes()
+	return len(c.Counts), buf.Bytes(), nil
 }
 
 // CreateGraphiteMessage buffers up a graphite message. c should not be used after calling this method.
-// namespace is applied to all the keys; countGaugeName is the name of a counter appended to the message that
-// lists the number of keys written. n is the number of keys written in total and msg is the graphite message
-// ready to send.
+// namespace and timestamp are applied to all the keys; countGaugeName is the name of a counter appended to
+// the message that lists the number of keys written. n is the number of keys written in total and msg is the
+// graphite message ready to send.
 // NOTE: We could write directly to the connection and avoid the extra buffering but this allows us to use
 // separate goroutines to write to graphite (potentially slow) and aggregate (happening all the time).
-func (c *BufferedStats) CreateGraphiteMessage(namespace, countGaugeName string) (n int, msg []byte) {
+func (c *BufferedStats) CreateGraphiteMessage(namespace, countGaugeName string,
+	timestamp time.Time) (n int, msg []byte) {
+
 	metrics := c.computeDerived()
 	buf := &bytes.Buffer{}
-	timestamp := now().Unix()
+	ts := timestamp.Unix()
 	for typ, s := range metrics {
 		for key, value := range s {
 			n++
-			fmt.Fprintf(buf, "%s.%s.%s %f %d\n", namespace, key, typ, value, timestamp)
+			fmt.Fprintf(buf, "%s.%s.%s %f %d\n", namespace, key, typ, value, ts)
 		}
 	}
 	n++
-	fmt.Fprintf(buf, "%s.gost.%s.gauge %f %d\n", namespace, countGaugeName, float64(n), timestamp)
+	fmt.Fprintf(buf, "%s.gost.%s.gauge %f %d\n", namespace, countGaugeName, float64(n), ts)
 	return n, buf.Bytes()
 }
 

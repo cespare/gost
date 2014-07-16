@@ -9,10 +9,10 @@ import (
 	"time"
 )
 
-func runScript(path string) (err error) {
+func (s *Server) runScript(path string) (err error) {
 	var count int64
 	defer func() {
-		dbg.Printf("script `%s` exited; emitted %d stat(s)", path, count)
+		s.l.Debugf("script `%s` exited; emitted %d stat(s)", path, count)
 	}()
 	cmd := exec.Command(path)
 	stdout, err := cmd.StdoutPipe()
@@ -30,7 +30,7 @@ func runScript(path string) (err error) {
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		handleMessage(line)
+		s.handleMessage(line)
 		count++
 	}
 	if err := scanner.Err(); err != nil {
@@ -39,15 +39,15 @@ func runScript(path string) (err error) {
 	return nil
 }
 
-func runScripts() {
+func (s *Server) runScripts() {
 	var scriptMutex sync.Mutex // protects currentlyRunning
 	currentlyRunning := make(map[string]struct{})
-	ticker := time.NewTicker(time.Duration(conf.Scripts.RunIntervalMS) * time.Millisecond)
+	ticker := time.NewTicker(time.Duration(s.conf.Scripts.RunIntervalMS) * time.Millisecond)
 	for _ = range ticker.C {
-		files, err := ioutil.ReadDir(conf.Scripts.Path)
+		files, err := ioutil.ReadDir(s.conf.Scripts.Path)
 		if err != nil {
-			dbg.Printf("failed to read scripts in %s: %s", conf.Scripts.Path, err)
-			metaInc("errors.run_scripts_list_dir")
+			s.l.Debugf("failed to read scripts in %s: %s", s.conf.Scripts.Path, err)
+			s.metaInc("errors.run_scripts_list_dir")
 			continue
 		}
 		scriptMutex.Lock()
@@ -55,17 +55,17 @@ func runScripts() {
 			if !file.Mode().IsRegular() {
 				continue
 			}
-			path := filepath.Join(conf.Scripts.Path, file.Name())
+			path := filepath.Join(s.conf.Scripts.Path, file.Name())
 			if _, ok := currentlyRunning[path]; ok {
-				dbg.Printf("not running script because a previous instance is still running: %s", path)
+				s.l.Debugf("not running script because a previous instance is still running: %s", path)
 				continue
 			}
-			dbg.Printf("running script: %s", path)
+			s.l.Debugf("running script: %s", path)
 			currentlyRunning[path] = struct{}{}
 			go func(p string) {
-				if err := runScript(p); err != nil {
-					dbg.Printf("error running script at %s: %s", p, err)
-					metaInc("errors.run_script")
+				if err := s.runScript(p); err != nil {
+					s.l.Debugf("error running script at %s: %s", p, err)
+					s.metaInc("errors.run_script")
 				}
 				scriptMutex.Lock()
 				delete(currentlyRunning, path)

@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -23,6 +22,8 @@ type Conf struct {
 	Namespace                string       `toml:"namespace"`
 	OSStats                  *OSStatsConf `toml:"os_stats"`
 	Scripts                  *ScriptsConf `toml:"scripts"`
+	forwardingEnabled        bool
+	forwarderEnabled         bool
 }
 
 type ScriptsConf struct {
@@ -60,62 +61,69 @@ type DiskConf struct {
 }
 
 // filterNamespace replaces templated fields in the user-provided namespace and sanitizes it.
-func filterNamespace(ns string) string {
+func filterNamespace(ns string) (string, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 	ns = strings.NewReplacer("%H", hostname).Replace(ns)
-	sanitized, ok, _, rest := parseKey([]byte(ns + ":"))
+	sanitized, ok, _, rest := parseKey([]byte(ns + ":"), false)
 	if !ok || len(rest) > 0 {
-		log.Fatal("Bad tag:", ns)
+		return "", fmt.Errorf("Bad tag: %s", ns)
 	}
-	return sanitized
+	return sanitized, nil
 }
 
-func parseConf() {
-	conf = &Conf{}
+func parseConf() (*Conf, error) {
+	conf := &Conf{}
 	f, err := os.Open(*configFile)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	meta, err := toml.DecodeReader(f, conf)
 	if err != nil {
-		log.Fatalf("Error decoding %s: %s", *configFile, err)
+		return nil, fmt.Errorf("Error decoding %s: %s", *configFile, err)
 	}
 
 	for _, field := range []string{"graphite_addr", "port", "debug_port", "flush_interval_ms", "namespace"} {
 		if !meta.IsDefined(field) {
-			log.Fatal(field, "is required")
+			return nil, fmt.Errorf("field %s is required", field)
 		}
 	}
 	if conf.FlushIntervalMS <= 0 {
-		log.Fatal("flush_interval_ms must be positive")
+		return nil, errors.New("flush_interval_ms must be positive")
 	}
 
 	if meta.IsDefined("forwarding_addr") {
-		forwardingEnabled = true
+		conf.forwardingEnabled = true
 	}
 
 	if meta.IsDefined("forwarder_listen_addr") {
-		forwarderEnabled = true
+		conf.forwarderEnabled = true
 		if !meta.IsDefined("forwarded_namespace") {
-			log.Fatal("forwarded_namespace is required if gost is configured as a forwarder")
+			return nil, errors.New("forwarded_namespace is required if gost is configured as a forwarder")
 		}
 	}
 
 	if err := validateOSStatsConf(conf.OSStats, meta); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	if !meta.IsDefined("os_stats", "check_interval_ms") {
 		conf.OSStats.CheckIntervalMS = conf.FlushIntervalMS
 	}
 	if err := validateScriptsConf(conf.Scripts, meta); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	conf.Namespace = filterNamespace(conf.Namespace)
-	conf.ForwardedNamespace = filterNamespace(conf.ForwardedNamespace)
+	conf.Namespace, err = filterNamespace(conf.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	conf.ForwardedNamespace, err = filterNamespace(conf.ForwardedNamespace)
+	if err != nil {
+		return nil, err
+	}
+	return conf, nil
 }
 
 func validateOSStatsConf(osStats *OSStatsConf, meta toml.MetaData) error {

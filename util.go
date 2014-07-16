@@ -2,47 +2,9 @@ package main
 
 import (
 	"bytes"
-	"log"
 	"strconv"
-	"time"
 	"unsafe"
 )
-
-var dbg _dbg
-
-type _dbg struct{}
-
-func (d _dbg) Printf(format string, args ...interface{}) {
-	if conf.DebugLogging {
-		log.Printf(format, args...)
-	}
-}
-
-func (d _dbg) Println(args ...interface{}) {
-	if conf.DebugLogging {
-		log.Println(args...)
-	}
-}
-
-// metaCount advances a counter for an internal gost stat.
-func metaCount(name string, value float64) {
-	incoming <- &Stat{
-		Type:       StatCounter,
-		Name:       "gost." + name,
-		Value:      value,
-		SampleRate: 1.0,
-	}
-}
-
-func metaInc(name string) { metaCount(name, 1) }
-
-func metaTimer(name string, elapsed time.Duration) {
-	incoming <- &Stat{
-		Type:  StatTimer,
-		Name:  "gost." + name,
-		Value: elapsed.Seconds() * 1000,
-	}
-}
 
 func isSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\r' || c == '\n'
@@ -53,7 +15,7 @@ func isSpace(c byte) bool {
 // found a ':' to split on, forward indicates whether this key is to be forwarded (forwarded keys start with
 // forwardKeyPrefix and that prefix is stripped from key), and rest is the remainder of the input after the
 // ':'.
-func parseKey(b []byte) (key string, ok bool, forward bool, rest []byte) {
+func parseKey(b []byte, forwardingEnabled bool) (key string, ok bool, forward bool, rest []byte) {
 	var buf bytes.Buffer
 	forward = forwardingEnabled
 	for i, c := range b {
@@ -145,9 +107,9 @@ func parseRate(b []byte) (float64, bool) {
 	return f, true
 }
 
-func parseStatsdMessage(msg []byte) (stat *Stat, ok bool) {
+func parseStatsdMessage(msg []byte, forwardingEnabled bool) (stat *Stat, ok bool) {
 	stat = &Stat{}
-	name, ok, forward, rest := parseKey(msg)
+	name, ok, forward, rest := parseKey(msg, forwardingEnabled)
 	if !ok || name == "" { // empty name is invalid
 		return nil, false
 	}
