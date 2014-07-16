@@ -266,6 +266,7 @@ func (s *Server) handleForwarded(c net.Conn) {
 			s.metaInc("errors.forwarded_message_read")
 			return
 		}
+		s.metaInc("forwarded_messages")
 		s.forwarderIncoming <- &BufferedStats{Counts: counts}
 	}
 }
