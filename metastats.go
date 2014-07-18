@@ -7,7 +7,7 @@ import (
 
 // If this queue fills, gost crashes to avoid deadlock. (Expected size is very small, so a full queue is
 // almost certainly a bug.)
-const metaStatsQueueSize = 10
+const metaStatsQueueSize = 10000
 
 func when(stat *Stat, ch chan *Stat) chan *Stat {
 	if stat == nil {
