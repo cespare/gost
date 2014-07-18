@@ -144,9 +144,9 @@ func (s *TestServer) Close() {
 
 func (s *TestServer) WaitForMessage() *graphiteMessages {
 	// Ensure the aggregator has time to collect all the messages we've sent in.
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	s.aggregateFlushChan <- s.when
-	timer := time.NewTimer(time.Millisecond)
+	timer := time.NewTimer(10 * time.Millisecond)
 	var messages []string
 loop:
 	for {
