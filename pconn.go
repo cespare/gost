@@ -1,6 +1,11 @@
 package main
 
-import "net"
+import (
+	"net"
+	"time"
+)
+
+const tcpDialTimeout = 10 * time.Second
 
 // A PConn is a persistent TCP connection. It opens a connection lazily when used and reopens the connection
 // on errors.
@@ -15,7 +20,7 @@ func DialPConn(addr string) *PConn {
 }
 
 func (c *PConn) connect() error {
-	conn, err := net.Dial("tcp", c.addr)
+	conn, err := net.DialTimeout("tcp", c.addr, tcpDialTimeout)
 	if err != nil {
 		return err
 	}
