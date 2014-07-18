@@ -272,10 +272,11 @@ func (s *Server) aggregateForwarded() {
 
 func (s *Server) handleForwarded(c net.Conn) {
 	defer c.Close()
-	decoder := gob.NewDecoder(c)
 	for {
 		var counts map[string]float64
-		if err := decoder.Decode(&counts); err != nil {
+		// Have to make a new decoder each time because the type info is sent over in each message.
+		// TODO(caleb): make this more efficient by only creating an encoder and decoder once.
+		if err := gob.NewDecoder(c).Decode(&counts); err != nil {
 			if err == io.EOF {
 				return
 			}
