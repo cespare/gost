@@ -14,7 +14,6 @@ import (
 // NOTE: this test suite does end-to-end testing of gost. It is not unit testing. The upside is that we get
 // thorough test coverage of the system with its multiple components. The downsides:
 // - It involves somewhat complex setup
-// - It's slower than typical Go tests (it takes about 1.7s for me)
 // - It's timing-dependent (we sleep to give messages a chance to go through in certain places)
 // It's possible that these tests could be improved or tightened up.
 
@@ -145,9 +144,9 @@ func (s *TestServer) Close() {
 
 func (s *TestServer) WaitForMessage() *graphiteMessages {
 	// Ensure the aggregator has time to collect all the messages we've sent in.
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(time.Millisecond)
 	s.aggregateFlushChan <- s.when
-	timer := time.NewTimer(50 * time.Millisecond)
+	timer := time.NewTimer(time.Millisecond)
 	var messages []string
 loop:
 	for {
