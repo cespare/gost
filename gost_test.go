@@ -15,7 +15,7 @@ import (
 // thorough test coverage of the system with its multiple components. The downsides:
 // - It involves somewhat complex setup
 // - It's slower than typical Go tests (it takes about 1.7s for me)
-// - It's timing-dependent (we sleep to give messages a chance to go through in certain places
+// - It's timing-dependent (we sleep to give messages a chance to go through in certain places)
 // It's possible that these tests could be improved or tightened up.
 
 type TestServer struct {
