@@ -248,10 +248,10 @@ func TestMetaStats(t *testing.T) {
 	s.CheckAllApprox(t, []testCase{
 		{"gost.errors.bad_message.count", 2.0},
 		{"gost.packets_received.count", 5.0},
-		// foobar/count (2), foobar/gauge (1), baz/gauge (1), gost.packets_received/count (2),
+		// server_start (2), foobar/count (2), foobar/gauge (1), baz/gauge (1), gost.packets_received/count (2),
 		// gost.bad_messages_seen/count (2), gost.distinct_metrics_flushed/gauge (1)
-		// total = 9
-		{"gost.distinct_metrics_flushed.gauge", 9.0},
+		// total = 11
+		{"gost.distinct_metrics_flushed.gauge", 11.0},
 	})
 }
 

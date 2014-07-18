@@ -163,6 +163,9 @@ func (s *Server) Listen(clientConn *net.UDPConn, forwardListener, debugListener 
 		errorCh <- s.clientServer(clientConn)
 	}()
 
+	// Indicate that we've started
+	s.metaInc("server_start")
+
 	return <-errorCh
 }
 
