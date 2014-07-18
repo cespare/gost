@@ -37,6 +37,8 @@ func (s *Server) handleMetaStats() {
 			default:
 				transientStat = nil
 			}
+		case <-s.quit:
+			return
 		}
 	}
 }

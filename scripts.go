@@ -43,35 +43,40 @@ func (s *Server) runScripts() {
 	var scriptMutex sync.Mutex // protects currentlyRunning
 	currentlyRunning := make(map[string]struct{})
 	ticker := time.NewTicker(time.Duration(s.conf.Scripts.RunIntervalMS) * time.Millisecond)
-	for _ = range ticker.C {
-		files, err := ioutil.ReadDir(s.conf.Scripts.Path)
-		if err != nil {
-			s.l.Debugf("failed to read scripts in %s: %s", s.conf.Scripts.Path, err)
-			s.metaInc("errors.run_scripts_list_dir")
-			continue
-		}
-		scriptMutex.Lock()
-		for _, file := range files {
-			if !file.Mode().IsRegular() {
+	for {
+		select {
+		case <-ticker.C:
+			files, err := ioutil.ReadDir(s.conf.Scripts.Path)
+			if err != nil {
+				s.l.Debugf("failed to read scripts in %s: %s", s.conf.Scripts.Path, err)
+				s.metaInc("errors.run_scripts_list_dir")
 				continue
 			}
-			path := filepath.Join(s.conf.Scripts.Path, file.Name())
-			if _, ok := currentlyRunning[path]; ok {
-				s.l.Debugf("not running script because a previous instance is still running: %s", path)
-				continue
-			}
-			s.l.Debugf("running script: %s", path)
-			currentlyRunning[path] = struct{}{}
-			go func(p string) {
-				if err := s.runScript(p); err != nil {
-					s.l.Debugf("error running script at %s: %s", p, err)
-					s.metaInc("errors.run_script")
+			scriptMutex.Lock()
+			for _, file := range files {
+				if !file.Mode().IsRegular() {
+					continue
 				}
-				scriptMutex.Lock()
-				delete(currentlyRunning, path)
-				scriptMutex.Unlock()
-			}(path)
+				path := filepath.Join(s.conf.Scripts.Path, file.Name())
+				if _, ok := currentlyRunning[path]; ok {
+					s.l.Debugf("not running script because a previous instance is still running: %s", path)
+					continue
+				}
+				s.l.Debugf("running script: %s", path)
+				currentlyRunning[path] = struct{}{}
+				go func(p string) {
+					if err := s.runScript(p); err != nil {
+						s.l.Debugf("error running script at %s: %s", p, err)
+						s.metaInc("errors.run_script")
+					}
+					scriptMutex.Lock()
+					delete(currentlyRunning, path)
+					scriptMutex.Unlock()
+				}(path)
+			}
+			scriptMutex.Unlock()
+		case <-s.quit:
+			return
 		}
-		scriptMutex.Unlock()
 	}
 }

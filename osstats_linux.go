@@ -249,8 +249,13 @@ func decomposeDevNumber(n uint64) partition {
 func (s *Server) checkOSStats() {
 	s.reportOSStats()
 	ticker := time.NewTicker(time.Duration(s.conf.OSStats.CheckIntervalMS) * time.Millisecond)
-	for _ = range ticker.C {
-		s.reportOSStats()
+	for {
+		select {
+		case <-ticker.C:
+			s.reportOSStats()
+		case <-s.quit:
+			return
+		}
 	}
 }
 

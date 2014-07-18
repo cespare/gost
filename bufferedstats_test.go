@@ -43,7 +43,7 @@ func TestBufferedStatsTimer(t *testing.T) {
 	approx(t, r["timer.mean"]["foo"], 300.0)
 	approx(t, r["timer.stdev"]["foo"], math.Sqrt((200.0*200.0+300.0*300.0+100.0*100.0)/3))
 	approx(t, r["timer.min"]["foo"], 100.0)
-	approx(t, r["timer.max"]["foo"], 500.0)
+	approx(t, r["timer.max"]["foo"], 600.0)
 	approx(t, r["timer.median"]["foo"], 200.0)
 
 	s = NewBufferedStats(2000)

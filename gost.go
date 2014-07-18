@@ -36,6 +36,7 @@ var (
 type Server struct {
 	conf *Conf
 	l    *llog.Logger
+	quit chan struct{} // For shutting down everything
 
 	bufPool chan []byte // pool of buffers for incoming messages
 
@@ -65,12 +66,15 @@ type Server struct {
 	osData OSData
 }
 
-func NewServer(conf *Conf) *Server {
+// NewServer sets up a new server with some configuration without starting goroutines or listeners. out is
+// where logs are written.
+func NewServer(conf *Conf, out io.Writer) *Server {
 	// TODO: May want to make this configurable later.
-	logger := llog.NewLogger(log.New(os.Stdout, "", log.LstdFlags), conf.DebugLogging)
+	logger := llog.NewLogger(log.New(out, "", log.LstdFlags), conf.DebugLogging)
 	s := &Server{
 		conf:            conf,
 		l:               logger,
+		quit:            make(chan struct{}),
 		bufPool:         make(chan []byte, nUDPBufs),
 		metaStats:       make(chan *Stat),
 		incoming:        make(chan *Stat, incomingQueueSize),
@@ -102,7 +106,11 @@ func NewServer(conf *Conf) *Server {
 	return s
 }
 
-func (s *Server) Listen() error {
+// Listen launches the various server goroutines and starts the various listeners.
+// If the listener params are nil, these are constructed from the parameters in the conf. Otherwise they are
+// used as-is. This makes it possible for the tests to construct listeners on an available port and pass them
+// in.
+func (s *Server) Listen(clientConn *net.UDPConn, forwardListener, debugListener net.Listener) error {
 	go s.handleMetaStats()
 	go s.flush()
 	go s.aggregate()
@@ -121,34 +129,38 @@ func (s *Server) Listen() error {
 
 	errorCh := make(chan error)
 	if s.conf.forwarderEnabled {
-		s.l.Println("Listening for forwarded gost messages on", s.conf.ForwarderListenAddr)
-		l, err := net.Listen("tcp", s.conf.ForwarderListenAddr)
-		if err != nil {
-			return err
+		if forwardListener == nil {
+			l, err := net.Listen("tcp", s.conf.ForwarderListenAddr)
+			if err != nil {
+				return err
+			}
+			forwardListener = tcpKeepAliveListener{l.(*net.TCPListener)}
 		}
-		listener := tcpKeepAliveListener{l.(*net.TCPListener)}
+		s.l.Println("Listening for forwarded gost messages on", forwardListener.Addr())
 		go s.aggregateForwarded()
 		go func() {
-			errorCh <- s.forwardServer(listener)
+			errorCh <- s.forwardServer(forwardListener)
 		}()
 	}
 
-	if err := s.debugServer.Start(s.conf.DebugPort); err != nil {
+	if err := s.debugServer.Start(s.conf.DebugPort, debugListener); err != nil {
 		return err
 	}
 
-	udpAddr := fmt.Sprintf("localhost:%d", s.conf.Port)
-	udp, err := net.ResolveUDPAddr("udp", udpAddr)
-	if err != nil {
-		return err
+	if clientConn == nil {
+		udpAddr := fmt.Sprintf("localhost:%d", s.conf.Port)
+		udp, err := net.ResolveUDPAddr("udp", udpAddr)
+		if err != nil {
+			return err
+		}
+		clientConn, err = net.ListenUDP("udp", udp)
+		if err != nil {
+			return err
+		}
 	}
-	s.l.Println("Listening for UDP client requests on", udp)
-	conn, err := net.ListenUDP("udp", udp)
-	if err != nil {
-		return err
-	}
+	s.l.Println("Listening for UDP client requests on", clientConn.LocalAddr())
 	go func() {
-		errorCh <- s.clientServer(conn)
+		errorCh <- s.clientServer(clientConn)
 	}()
 
 	return <-errorCh
@@ -249,6 +261,8 @@ func (s *Server) aggregateForwarded() {
 			s.l.Debugf("Sending %d forwarded stat(s) to graphite.", n)
 			s.outgoing <- msg
 			s.forwardedStats.Clear(!s.conf.ClearStatsBetweenFlushes)
+		case <-s.quit:
+			return
 		}
 	}
 }
@@ -311,6 +325,8 @@ func (s *Server) aggregateForwarding() {
 			}
 			// Always delete forwarded stats -- they are cleared/preserved between flushes at the receiving end.
 			s.forwardingStats.Clear(false)
+		case <-s.quit:
+			return
 		}
 	}
 }
@@ -319,15 +335,20 @@ func (s *Server) aggregateForwarding() {
 func (s *Server) flushForwarding() {
 	conn := DialPConn(s.conf.ForwardingAddr)
 	defer conn.Close()
-	for msg := range s.forwardingOutgoing {
-		debugMsg := fmt.Sprintf("<binary forwarding message; len = %d bytes>", len(msg))
-		s.debugServer.Print("[forward]", []byte(debugMsg))
-		start := time.Now()
-		if _, err := conn.Write(msg); err != nil {
-			s.metaInc("errors.forwarding_write")
-			s.l.Printf("Warning: could not write forwarding message to %s: %s", s.conf.ForwardingAddr, err)
+	for {
+		select {
+		case msg := <-s.forwardingOutgoing:
+			debugMsg := fmt.Sprintf("<binary forwarding message; len = %d bytes>", len(msg))
+			s.debugServer.Print("[forward]", []byte(debugMsg))
+			start := time.Now()
+			if _, err := conn.Write(msg); err != nil {
+				s.metaInc("errors.forwarding_write")
+				s.l.Printf("Warning: could not write forwarding message to %s: %s", s.conf.ForwardingAddr, err)
+			}
+			s.metaTimer("graphite_write", time.Since(start))
+		case <-s.quit:
+			return
 		}
-		s.metaTimer("graphite_write", time.Since(start))
 	}
 }
 
@@ -336,7 +357,6 @@ func (s *Server) flushForwarding() {
 func (s *Server) aggregate() {
 	ticker := s.aggregateFlushTicker()
 	for {
-		time.Sleep(time.Second)
 		select {
 		case stat := <-s.incoming:
 			key := stat.Name
@@ -355,6 +375,8 @@ func (s *Server) aggregate() {
 			s.l.Debugf("Flushing %d stat(s).", n)
 			s.outgoing <- msg
 			s.stats.Clear(!s.conf.ClearStatsBetweenFlushes)
+		case <-s.quit:
+			return
 		}
 	}
 }
@@ -363,14 +385,19 @@ func (s *Server) aggregate() {
 func (s *Server) flush() {
 	conn := DialPConn(s.conf.GraphiteAddr)
 	defer conn.Close()
-	for msg := range s.outgoing {
-		s.debugServer.Print("[out] ", msg)
-		start := time.Now()
-		if _, err := conn.Write(msg); err != nil {
-			s.metaInc("errors.graphite_write")
-			s.l.Printf("Warning: could not write message to Graphite at %s: %s", s.conf.GraphiteAddr, err)
+	for {
+		select {
+		case msg := <-s.outgoing:
+			s.debugServer.Print("[out] ", msg)
+			start := time.Now()
+			if _, err := conn.Write(msg); err != nil {
+				s.metaInc("errors.graphite_write")
+				s.l.Printf("Warning: could not write message to Graphite at %s: %s", s.conf.GraphiteAddr, err)
+			}
+			s.metaTimer("graphite_write", time.Since(start))
+		case <-s.quit:
+			return
 		}
-		s.metaTimer("graphite_write", time.Since(start))
 	}
 }
 
@@ -381,12 +408,16 @@ type dServer struct {
 	Clients []net.Conn
 }
 
-func (s *dServer) Start(port int) error {
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	s.l.Println("Listening for debug TCP clients on", addr)
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
+// If listener is non-nil, then it's used; otherwise listen on TCP using the given port.
+func (s *dServer) Start(port int, listener net.Listener) error {
+	if listener == nil {
+		addr := fmt.Sprintf("127.0.0.1:%d", port)
+		s.l.Println("Listening for debug TCP clients on", addr)
+		var err error
+		listener, err = net.Listen("tcp", addr)
+		if err != nil {
+			return err
+		}
 	}
 	go func() {
 		for {
@@ -466,5 +497,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Fatal(NewServer(conf).Listen())
+	log.Fatal(NewServer(conf, os.Stdout).Listen(nil, nil, nil))
 }
