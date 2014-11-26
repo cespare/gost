@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"reflect"
 	"strconv"
 	"unsafe"
 )
@@ -48,9 +49,14 @@ func parseKey(b []byte, forwardingEnabled bool) (key string, ok bool, forward bo
 // TODO XXX HACK FIXME
 // parseFloat reads a float64 from b. This uses unsafe hackery courtesy of
 // https://code.google.com/p/go/issues/detail?id=2632#c16 -- if that issue gets fixed, we should switch to
-// doing that instead of using an unsafe []byte -> string conversion.
+// doing that instead of using unsafe.
 func parseFloat(b []byte) (float64, error) {
-	s := *(*string)(unsafe.Pointer(&b))
+	bhp := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	sh := reflect.StringHeader{
+		Data: bhp.Data,
+		Len:  bhp.Len,
+	}
+	s := *(*string)(unsafe.Pointer(&sh))
 	return strconv.ParseFloat(s, 64)
 }
 
