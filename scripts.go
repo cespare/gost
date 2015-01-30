@@ -64,15 +64,15 @@ func (s *Server) runScripts() {
 				}
 				s.l.Debugf("running script: %s", path)
 				currentlyRunning[path] = struct{}{}
-				go func(p string) {
-					if err := s.runScript(p); err != nil {
-						s.l.Debugf("error running script at %s: %s", p, err)
+				go func() {
+					if err := s.runScript(path); err != nil {
+						s.l.Debugf("error running script at %s: %s", path, err)
 						s.metaInc("errors.run_script")
 					}
 					scriptMutex.Lock()
 					delete(currentlyRunning, path)
 					scriptMutex.Unlock()
-				}(path)
+				}()
 			}
 			scriptMutex.Unlock()
 		case <-s.quit:
