@@ -19,12 +19,22 @@ func (s *Server) runScript(path string) (err error) {
 	if err != nil {
 		return err
 	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 	defer func() {
-		if e2 := cmd.Wait(); e2 != nil && err == nil {
-			err = e2
+		output, e := ioutil.ReadAll(stderr)
+		if e != nil {
+			err = e
+			return
+		}
+		if e := cmd.Wait(); e != nil && err == nil {
+			s.l.Debugf("stderr of %s: %s", path, output)
+			err = e
 		}
 	}()
 	scanner := bufio.NewScanner(stdout)
