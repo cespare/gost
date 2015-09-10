@@ -31,6 +31,8 @@ const (
 var (
 	configFile       = flag.String("conf", "conf.toml", "TOML configuration file")
 	forwardKeyPrefix = []byte("f|")
+
+	version = "no version " // can be overridden at build time with -ldflags -X
 )
 
 type Server struct {
@@ -496,7 +498,14 @@ func (l tcpKeepAliveListener) Accept() (net.Conn, error) {
 }
 
 func main() {
+	versionFlag := flag.Bool("version", false, "Display the version and exit")
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Println(version)
+		return
+	}
+
 	conf, err := parseConf()
 	if err != nil {
 		log.Fatal(err)
