@@ -1,3 +1,4 @@
 /gost
 /gost.test
 *.pprof
+/bin
