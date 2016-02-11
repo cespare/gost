@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"reflect"
 	"strconv"
 	"unsafe"
 )
@@ -50,7 +51,10 @@ func parseKey(b []byte, forwardingEnabled bool) (key string, ok bool, forward bo
 // https://code.google.com/p/go/issues/detail?id=2632#c16 -- if that issue gets fixed, we should switch to
 // doing that instead of using an unsafe []byte -> string conversion.
 func parseFloat(b []byte) (float64, error) {
-	s := *(*string)(unsafe.Pointer(&b))
+	var s string
+	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	sh.Data = uintptr(unsafe.Pointer(&b[0]))
+	sh.Len = len(b)
 	return strconv.ParseFloat(s, 64)
 }
 
