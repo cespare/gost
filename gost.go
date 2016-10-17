@@ -18,13 +18,15 @@ import (
 const (
 	incomingQueueSize = 100
 
-	// Gost used a number of fixed-size buffers for incoming messages to limit allocations. This is controlled
-	// by udpBufSize and nUDPBufs. Note that gost cannot accept statsd messages larger than udpBufSize.
-	// In this case, the total size of buffers for incoming messages is 10e3 * 1000 = 10MB.
+	// Gost used a number of fixed-size buffers for incoming messages to
+	// limit allocations. This is controlled by udpBufSize and nUDPBufs.
+	// Note that gost cannot accept statsd messages larger than udpBufSize.
+	// In this case, the total size of buffers for incoming messages is 10e3
+	// * 1000 = 10MB.
 	udpBufSize = 10e3
 	nUDPBufs   = 1000
 
-	// All TCP connections managed by gost have this keepalive duration applied
+	// All TCP connections managed by gost have this keepalive duration.
 	tcpKeepAlivePeriod = 30 * time.Second
 )
 
@@ -38,7 +40,7 @@ var (
 type Server struct {
 	conf *Conf
 	l    *llog.Logger
-	quit chan struct{} // For shutting down everything
+	quit chan struct{} // for shutting down everything
 
 	bufPool chan []byte // pool of buffers for incoming messages
 
@@ -49,9 +51,9 @@ type Server struct {
 
 	stats *BufferedStats
 
-	forwardingStats    *BufferedStats // Counters to be forwarded
-	forwardingIncoming chan *Stat     // Incoming messages to be forwarded
-	forwardingOutgoing chan []byte    // Outgoing forwarded messages
+	forwardingStats    *BufferedStats // counters to be forwarded
+	forwardingIncoming chan *Stat     // incoming messages to be forwarded
+	forwardingOutgoing chan []byte    // outgoing forwarded messages
 
 	forwarderIncoming chan *BufferedStats // incoming forwarded messages
 	forwardedStats    *BufferedStats
@@ -68,8 +70,8 @@ type Server struct {
 	osData OSData
 }
 
-// NewServer sets up a new server with some configuration without starting goroutines or listeners. out is
-// where logs are written.
+// NewServer sets up a new server with some configuration without starting
+// goroutines or listeners. out is where logs are written.
 func NewServer(conf *Conf, out io.Writer) *Server {
 	// TODO: May want to make this configurable later.
 	logger := llog.NewLogger(log.New(out, "", log.LstdFlags), conf.DebugLogging)
@@ -83,9 +85,11 @@ func NewServer(conf *Conf, out io.Writer) *Server {
 		outgoing:        make(chan []byte),
 		stats:           NewBufferedStats(conf.FlushIntervalMS),
 		forwardingStats: NewBufferedStats(conf.FlushIntervalMS),
-		// Having forwardingIncoming be nil when forwarding is not enabled ensures that gost will crash fast if
-		// somehow messages are interpreted as forwarded messages even when forwarding is turned off (which should
-		// never happen). Otherwise the behavior would be to fill up the queue and then deadlock.
+		// Having forwardingIncoming be nil when forwarding is not
+		// enabled ensures that gost will crash fast if somehow messages
+		// are interpreted as forwarded messages even when forwarding is
+		// turned off (which should never happen). Otherwise the
+		// behavior would be to fill up the queue and then deadlock.
 		forwardingIncoming: nil,
 		forwardingOutgoing: make(chan []byte),
 		forwarderIncoming:  make(chan *BufferedStats, incomingQueueSize),
@@ -94,7 +98,7 @@ func NewServer(conf *Conf, out io.Writer) *Server {
 		now:                time.Now,
 	}
 	s.InitOSData()
-	// Preallocate the UDP buffer pool
+	// Preallocate the UDP buffer pool.
 	for i := 0; i < nUDPBufs; i++ {
 		s.bufPool <- make([]byte, udpBufSize)
 	}
@@ -108,10 +112,10 @@ func NewServer(conf *Conf, out io.Writer) *Server {
 	return s
 }
 
-// Listen launches the various server goroutines and starts the various listeners.
-// If the listener params are nil, these are constructed from the parameters in the conf. Otherwise they are
-// used as-is. This makes it possible for the tests to construct listeners on an available port and pass them
-// in.
+// Listen launches the various server goroutines and starts the various
+// listeners. If the listener params are nil, these are constructed from the
+// parameters in the conf. Otherwise they are used as-is. This makes it possible
+// for the tests to construct listeners on an available port and pass them in.
 func (s *Server) Listen(clientConn *net.UDPConn, forwardListener, debugListener net.Listener) error {
 	go s.handleMetaStats()
 	go s.flush()
@@ -165,7 +169,7 @@ func (s *Server) Listen(clientConn *net.UDPConn, forwardListener, debugListener 
 		errorCh <- s.clientServer(clientConn)
 	}()
 
-	// Indicate that we've started
+	// Indicate that we've started.
 	s.metaInc("server_start")
 
 	return <-errorCh
@@ -185,10 +189,9 @@ type Stat struct {
 	Forward    bool
 	Name       string
 	Value      float64
-	SampleRate float64 // Only for counters
+	SampleRate float64 // only for counters
 }
 
-// tagToStatType maps a tag (e.g., []byte("c")) to a StatType (e.g., StatCounter).
 func tagToStatType(b []byte) (StatType, bool) {
 	switch len(b) {
 	case 1:
@@ -212,7 +215,7 @@ func (s *Server) handleMessages(buf []byte) {
 	for _, msg := range bytes.Split(buf, []byte{'\n'}) {
 		s.handleMessage(msg)
 	}
-	s.bufPool <- buf[:cap(buf)] // Reset buf's length and return to the pool
+	s.bufPool <- buf[:cap(buf)] // reset buf's length and return to the pool
 }
 
 func (s *Server) handleMessage(msg []byte) {
@@ -276,8 +279,10 @@ func (s *Server) handleForwarded(c net.Conn) {
 	defer c.Close()
 	for {
 		var counts map[string]float64
-		// Have to make a new decoder each time because the type info is sent over in each message.
-		// TODO(caleb): make this more efficient by only creating an encoder and decoder once.
+		// Have to make a new decoder each time because the type info is
+		// sent over in each message.
+		// TODO(caleb): make this more efficient by only creating an
+		// encoder and decoder once.
 		if err := gob.NewDecoder(c).Decode(&counts); err != nil {
 			if err == io.EOF {
 				return
@@ -308,8 +313,8 @@ func (s *Server) forwardServer(listener net.Listener) error {
 	}
 }
 
-// aggregateForwarding reads incoming forward messages and aggregates them. Every flush interval it forwards
-// the collected stats.
+// aggregateForwarding reads incoming forward messages and aggregates them.
+// Every flush interval it forwards the collected stats.
 func (s *Server) aggregateForwarding() {
 	ticker := s.aggregateForwardingFlushTicker()
 	for {
@@ -329,7 +334,8 @@ func (s *Server) aggregateForwarding() {
 			} else {
 				s.l.Debugln("No stats to forward.")
 			}
-			// Always delete forwarded stats -- they are cleared/preserved between flushes at the receiving end.
+			// Always delete forwarded stats -- they are cleared/preserved
+			// between flushes at the receiving end.
 			s.forwardingStats.Clear(false)
 		case <-s.quit:
 			return
@@ -358,8 +364,8 @@ func (s *Server) flushForwarding() {
 	}
 }
 
-// aggregate reads the incoming messages and aggregates them. It sends them to be flushed every flush
-// interval.
+// aggregate reads the incoming messages and aggregates them. It sends them to
+// be flushed every flush interval.
 func (s *Server) aggregate() {
 	ticker := s.aggregateFlushTicker()
 	for {
@@ -407,14 +413,16 @@ func (s *Server) flush() {
 	}
 }
 
-// dServer listens on a local tcp port and prints out debugging info to clients that connect.
+// dServer listens on a local tcp port and prints out debugging info to clients
+// that connect.
 type dServer struct {
 	l *llog.Logger
 	sync.Mutex
 	Clients []net.Conn
 }
 
-// If listener is non-nil, then it's used; otherwise listen on TCP using the given port.
+// If listener is non-nil, then it's used; otherwise listen on TCP using the
+// given port.
 func (s *dServer) Start(port int, listener net.Listener) error {
 	if listener == nil {
 		addr := fmt.Sprintf("127.0.0.1:%d", port)

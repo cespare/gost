@@ -11,21 +11,23 @@ import (
 	"time"
 )
 
-// NOTE: this test suite does end-to-end testing of gost. It is not unit testing. The upside is that we get
-// thorough test coverage of the system with its multiple components. The downsides:
+// NOTE: this test suite does end-to-end testing of gost. It is not unit
+// testing. The upside is that we get thorough test coverage of the system with
+// its multiple components. The downsides:
 // - It involves somewhat complex setup
-// - It's timing-dependent (we sleep to give messages a chance to go through in certain places)
+// - It's timing-dependent (we sleep to give messages a chance to go through in
+//   certain places)
 // It's possible that these tests could be improved or tightened up.
 
 type TestServer struct {
 	s    *Server
-	wait chan struct{} // Wait on this until s closes
+	wait chan struct{} // wait on this until s closes
 
 	udpConn         *net.UDPConn
 	forwardListener net.Listener
 	debugListener   net.Listener
 
-	when                         time.Time // Static time to return for now()
+	when                         time.Time // static time to return for now()
 	aggregateFlushChan           chan time.Time
 	aggregateForwardedFlushChan  chan time.Time
 	aggregateForwardingFlushChan chan time.Time
@@ -56,7 +58,7 @@ func NewTestServer() *TestServer {
 		recorderQuit:                 make(chan struct{}),
 	}
 
-	// Stub out control functions
+	// Stub out control functions.
 	s.s.now = func() time.Time { return s.when }
 	s.s.aggregateFlushTicker = func() <-chan time.Time { return s.aggregateFlushChan }
 	s.s.aggregateForwardedFlushTicker = func() <-chan time.Time { return s.aggregateForwardedFlushChan }
@@ -81,7 +83,7 @@ func NewTestServer() *TestServer {
 		panic(err)
 	}
 
-	// Start the fake Graphite recorder
+	// Start the fake Graphite recorder.
 	s.recorderListener, err = net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
@@ -112,7 +114,7 @@ func NewTestServer() *TestServer {
 		}
 	}()
 
-	// Backfill some conf fields
+	// Backfill some conf fields.
 	s.s.conf.GraphiteAddr = s.recorderAddr
 	s.s.conf.ForwardingAddr = s.forwardListener.Addr().String()
 
@@ -247,8 +249,10 @@ func TestMetaStats(t *testing.T) {
 	s.CheckAllApprox(t, []testCase{
 		{"gost.errors.bad_message.count", 2.0},
 		{"gost.packets_received.count", 5.0},
-		// server_start (2), foobar/count (2), foobar/gauge (1), baz/gauge (1), gost.packets_received/count (2),
-		// gost.bad_messages_seen/count (2), gost.distinct_metrics_flushed/gauge (1)
+		// server_start (2), foobar/count (2), foobar/gauge (1),
+		// baz/gauge (1), gost.packets_received/count (2),
+		// gost.bad_messages_seen/count (2),
+		// gost.distinct_metrics_flushed/gauge (1)
 		// total = 11
 		{"gost.distinct_metrics_flushed.gauge", 11.0},
 	})
@@ -306,7 +310,7 @@ func TestSanitization(t *testing.T) {
 	}
 	s.SendGostMessages(t,
 		fmt.Sprintf("%s:1|c", allChars),
-		"föo\tbar:1|c",  // Non-printable or non-ascii is removed
+		"föo\tbar:1|c",  // non-printable or non-ascii is removed
 		"foo bar:1|c",   // spaces changed to _
 		"foo/bar:1|c",   // / changed to -
 		"rem*ove1:1|c",  // * removed
@@ -338,7 +342,7 @@ func TestForwardedKeyParsing(t *testing.T) {
 		{"quf|ux.count", 1.0},
 	})
 
-	// Push the forwarded messages through
+	// Push the forwarded messages through.
 	s.aggregateForwardingFlushChan <- s.when
 	time.Sleep(time.Millisecond)
 	s.aggregateForwardedFlushChan <- s.when

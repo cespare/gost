@@ -1,108 +1,125 @@
-# Graphite backend address
+# Graphite backend address.
 graphite_addr = "localhost:2003"
 
-# Gost forwarding address -- if this variable is set, forwarding to another gost is enabled
+# Gost forwarding address -- if this variable is set, forwarding to another gost
+# is enabled.
 forwarding_addr = "localhost:8124"
 
-# Bind address to listen on for forwarded messages -- if this is set, gost is configured as a forwarder
+# Bind address to listen on for forwarded messages -- if this is set, gost is
+# configured as a forwarder.
 forwarder_listen_addr = ":8124"
 
-# Namespace for forwarded stats. This variable must be set if forwarder_listen_addr is set.
+# Namespace for forwarded stats. This variable must be set if
+# forwarder_listen_addr is set.
 forwarded_namespace = "example.global"
 
-# Port to listen (on localhost) for statsd messages from clients over UDP
+# Port to listen (on localhost) for statsd messages from clients over UDP.
 port = 8125
 
-# Port to listen (on localhost) for people to connect (using, e.g., telnet) for debugging output.
+# Port to listen (on localhost) for people to connect (using, e.g., telnet) for
+# debugging output.
 debug_port = 8126
 
-# Print some verbose debugging information
+# Print some verbose debugging information.
 debug_logging = true
 
-# This option controls whether gost clears out stats after it flushes. If true, gost won't remember what stats
-# it has seen; if false, it will set counts to 0 (and leave gauges at the previous value) but keep sending the
-# zeroed-out values.
+# This option controls whether gost clears out stats after it flushes. If true,
+# gost won't remember what stats it has seen; if false, it will set counts to 0
+# (and leave gauges at the previous value) but keep sending the zeroed-out
+# values.
 clear_stats_between_flushes = false
 
-# Interval to flush to graphite in milliseconds
+# Interval to flush to graphite in milliseconds.
 flush_interval_ms = 2000
 
-# Dot-separated namespace for metrics. %H will be replaced with the machine's hostname. For instance, if
-# namespace is example.%H and the hostname is web-25, then a counter called web.requests would be sent to
-# graphite with the name "example.web-25.counters.web.requests".
+# Dot-separated namespace for metrics. %H will be replaced with the machine's
+# hostname. For instance, if namespace is example.%H and the hostname is web-25,
+# then a counter called web.requests would be sent to graphite with the name
+# "example.web-25.counters.web.requests".
 namespace = "example.%H"
 
-# Whether to send back some counters about the stats that gost has seen (for instance, the number of bad
-# messages and the number of packets received).
+# Whether to send back some counters about the stats that gost has seen (for
+# instance, the number of bad messages and the number of packets received).
 meta_stats = true
 
-# The scripts section specifies how to run auxiliary scripts. This section should be removed or commented out
-# if no scripts are going to be used.
+# The scripts section specifies how to run auxiliary scripts. This section
+# should be removed or commented out if no scripts are going to be used.
 [scripts]
 
-# This is a directory where scripts are located. If a relative path, it is relative to the current working
-# directory of the gost process.
+# This is a directory where scripts are located. If a relative path, it is
+# relative to the current working directory of the gost process.
 path = "scripts"
 
-# The frequency with which to run scripts. Each script is started this frequently. The next run of the script
-# does not start until that script has exited, even if it misses run intervals.
+# The frequency with which to run scripts. Each script is started this
+# frequently. The next run of the script does not start until that script has
+# exited, even if it misses run intervals.
 run_interval_ms = 10000
 
-# The os_stats section specifies stats that gost will determine from the host system.
-# NOTE: Everything below here is linux-specific. os_stats pulls information from the /proc filesystem and
-# Linux syscalls.
+# The os_stats section specifies stats that gost will determine from the host
+# system.
+# NOTE: Everything below here is linux-specific. os_stats pulls information from
+# the /proc filesystem and Linux syscalls.
 # NOTE: Delete/comment out the whole os_stats section if you're not using it.
 [os_stats]
 
-# check_interval_ms is used to change the frequency OS stat checks are done. If not given, the checks will be
-# performed every flush_interval_ms.
+# check_interval_ms is used to change the frequency OS stat checks are done. If
+# not given, the checks will be performed every flush_interval_ms.
 check_interval_ms = 30000
 
 # If os_stats.mem is set, two os_stats gauges will be reported:
-# mem.used: This is the used memory (MemTotal - MemFree - Buffers - Cached), either as an absolute number or a
-#   fraction of MemTotal, depending on whether breakdown is "absolute" or "fraction".
-# mem.cached: This is the memory used for disk cache, either as an absolute number or a fraction of MemTotal.
+# mem.used: This is the used memory (MemTotal - MemFree - Buffers - Cached),
+#   either as an absolute number or a fraction of MemTotal, depending on whether
+#   breakdown is "absolute" or "fraction".
+# mem.cached: This is the memory used for disk cache, either as an absolute
+#   number or a fraction of MemTotal.
 [os_stats.mem]
 breakdown = "fraction" # Default is "fraction", if unspecified.
 
 # The os_stats.cpu section controls which CPU stats are reported.
 [os_stats.cpu]
-# If stat is set, then the following os_stats gauges will be reported (all of these are in fractions of total
-# CPU time across all CPUs, which is the sum of all cpu counters including idle time).
+# If stat is set, then the following os_stats gauges will be reported (all of
+# these are in fractions of total CPU time across all CPUs, which is the sum of
+# all cpu counters including idle time):
 # cpu.{user,nice,system,iowait}
 stat = true
-# If load_avg is set, then the 1/5/15-minute CPU load averages are reported. The valid values for load_avg are
-# "total", which causes the numbers to be reported directly:
+# If load_avg is set, then the 1/5/15-minute CPU load averages are reported. The
+# valid values for load_avg are "total", which causes the numbers to be reported
+# directly:
 # cpu.load_avg_{1,5,15}
-# and "per_cpu", which causes the numbers to be divided by the number of logical CPUs to normalize them:
+# and "per_cpu", which causes the numbers to be divided by the number of logical
+# CPUs to normalize them:
 # cpu.load_avg_per_cpu_{1,5,15}
 load_avg = "per_cpu" # or "total"
 
 # The os_stats.net controls which network stats are reported.
 [os_stats.net]
 # If tcp is set, report TCP connection stats:
-# net.tcp.{active,passive}_opens: the number of {outgoing, incoming} TCP connections established
-# net.tcp.current_connections: a gauge for the current TCP connections
+# net.tcp.{active,passive}_opens:
+#   the number of {outgoing, incoming} TCP connections established
+# net.tcp.current_connections:
+#   a gauge for the current TCP connections
 tcp = true
 # If udp is set, report UDP packet stats:
-# net.udp.{in,out}_datagrams: Counters for incoming/outgoing UDP packets
+# net.udp.{in,out}_datagrams: counters for incoming/outgoing UDP packets
 udp = true
 # Devices is a list of network interfaces to report per-device stats:
-# net.devices.eth0.{receive,transmit}_bytes: Bytes received/transmitted
-# net.devices.eth0.{receive,transmit}_packets: Packets received/transmitted
-# net.devices.eth0.{receive,transmit}_errors: Receive/transmit errors
+# net.devices.eth0.{receive,transmit}_bytes: bytes received/transmitted
+# net.devices.eth0.{receive,transmit}_packets: packets received/transmitted
+# net.devices.eth0.{receive,transmit}_errors: receive/transmit errors
 devices = ["eth0", "lo"]
 
-# A disk section generates stats for a particular disk device. It is identified by its mount point. In this
-# example, the disk is called 'data_volume' and it monitors /mnt/data
+# A disk section generates stats for a particular disk device. It is identified
+# by its mount point. In this example, the disk is called 'data_volume' and it
+# monitors /mnt/data.
 [os_stats.disk.data_volume]
 path = "/mnt/data"
-# If usage is set, a gauge will report how much space is used on the disk, either as an absolute amount (in
-# bytes) or as a fraction of total:
+# If usage is set, a gauge will report how much space is used on the disk,
+# either as an absolute amount (in bytes) or as a fraction of total:
 # disk.data_volume.usage
 usage = "fraction" # or "absolute"
 # If io is set, then io stats will be reported for this device:
-# disk.data_volume.io.{reads,writes}: The number of disk reads and writes.
-# disk.data_volume.io.{read,write}_bytes: The number of bytes read/written.
-# Note that the sum of the first counter pair is what is often called disk IOPS (if taken per second).
+# disk.data_volume.io.{reads,writes}: the number of disk reads and writes
+# disk.data_volume.io.{read,write}_bytes: the number of bytes read/written
+# Note that the sum of the first counter pair is what is often called disk IOPS
+# (if taken per second).
 io = true

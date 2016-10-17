@@ -60,7 +60,8 @@ type DiskConf struct {
 	IO    bool   `toml:"io"`
 }
 
-// filterNamespace replaces templated fields in the user-provided namespace and sanitizes it.
+// filterNamespace replaces templated fields in the user-provided namespace
+// and sanitizes it.
 func filterNamespace(ns string) (string, error) {
 	hostname, err := os.Hostname()
 	if err != nil {

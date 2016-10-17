@@ -16,8 +16,8 @@ type BufferedStats struct {
 	Sets            map[string]map[float64]struct{}
 	Timers          map[string][]float64
 
-	// When clear_stats_between_flushes = false, this is used to preserve {count, gauge, set} names between
-	// flushes.
+	// When clear_stats_between_flushes = false, this is used to preserve
+	// {count, gauge, set} names between flushes.
 	PersistentKeys map[string]map[string]struct{}
 }
 
@@ -52,24 +52,24 @@ func (c *BufferedStats) RecordTimer(key string, value float64) {
 	c.Timers[key] = append(c.Timers[key], value)
 }
 
-// Merge merges in another BufferedStats. Right now it only adds in Counts (because only counts can be
-// forwarded).
+// Merge merges in another BufferedStats. Right now it only adds in Counts
+// (because only counts can be forwarded).
 func (c *BufferedStats) Merge(c2 *BufferedStats) {
 	for name, value := range c2.Counts {
 		c.AddCount(name, value)
 	}
 }
 
-// computeDerived post-processes the stats to add in the derived metrics and returns map of all the key-value
-// stats grouped by type.
+// computeDerived post-processes the stats to add in the derived metrics and
+// returns a map of all the key-value stats grouped by type.
 func (c *BufferedStats) computeDerived() map[string]map[string]float64 {
 	result := map[string]map[string]float64{
-		// Put in the stats we've already got
+		// Put in the stats we've already got.
 		"count": c.Counts,
 		"gauge": c.Gauges,
 	}
 
-	// Empty maps for values to fill in
+	// Empty maps for values to fill in.
 	for _, k := range []string{"rate", "set"} {
 		result[k] = make(map[string]float64)
 	}
@@ -77,29 +77,31 @@ func (c *BufferedStats) computeDerived() map[string]map[string]float64 {
 		result["timer."+k] = make(map[string]float64)
 	}
 
-	// Compute the per-second rate for each counter
+	// Compute the per-second rate for each counter.
 	rateFactor := float64(c.FlushIntervalMS) / 1000
 	for key, value := range c.Counts {
 		result["rate"][key] = value / rateFactor
 	}
 
-	// Get the size of each set
+	// Get the size of each set.
 	for key, value := range c.Sets {
 		result["set"][key] = float64(len(value))
 	}
 
-	// Process all the various stats for each timer
+	// Process the various stats for each timer.
 	for key, values := range c.Timers {
 		if len(values) == 0 {
 			continue
 		}
-		// Useful for order statistics (technically there are faster algorithms though)
+		// Useful for order statistics (technically there are faster
+		// algorithms though).
 		sort.Float64s(values)
 		count := float64(len(values))
 		result["timer.count"][key] = count
 		// rate is the rate (per second) at which timings were recorded.
 		result["timer.rate"][key] = count / rateFactor
-		// sum is the total sum of all timings. You can use count and sum to compute statistics across buckets.
+		// sum is the total sum of all timings. You can use count and
+		// sum to compute statistics across buckets.
 		sum := 0.0
 		for _, t := range values {
 			sum += t
@@ -134,9 +136,11 @@ func (c *BufferedStats) computeDerived() map[string]map[string]float64 {
 	return result
 }
 
-// CreateForwardMessage buffers up stats for forwarding to another gost instance. Right now it only serializes
-// the counts, because they are all that may be forwarded.
-// TODO: We could switch to a simple binary wire format to avoid reflection if gob ends up being a bottleneck.
+// CreateForwardMessage buffers up stats for forwarding to another gost
+// instance. Right now it only serializes the counts, because they are all that
+// may be forwarded.
+// TODO: We could switch to a simple binary wire format to avoid reflection if
+// gob ends up being a bottleneck.
 func (c *BufferedStats) CreateForwardMessage() (n int, msg []byte, err error) {
 	buf := &bytes.Buffer{}
 	encoder := gob.NewEncoder(buf)
@@ -146,12 +150,14 @@ func (c *BufferedStats) CreateForwardMessage() (n int, msg []byte, err error) {
 	return len(c.Counts), buf.Bytes(), nil
 }
 
-// CreateGraphiteMessage buffers up a graphite message. c should not be used after calling this method.
-// namespace and timestamp are applied to all the keys; countGaugeName is the name of a counter appended to
-// the message that lists the number of keys written. n is the number of keys written in total and msg is the
-// graphite message ready to send.
-// NOTE: We could write directly to the connection and avoid the extra buffering but this allows us to use
-// separate goroutines to write to graphite (potentially slow) and aggregate (happening all the time).
+// CreateGraphiteMessage buffers up a graphite message. c should not be used
+// after calling this method. namespace and timestamp are applied to all the
+// keys; countGaugeName is the name of a counter appended to the message that
+// lists the number of keys written. n is the number of keys written in total
+// and msg is the graphite message ready to send.
+// NOTE: We could write directly to the connection and avoid the extra buffering
+// but this allows us to use separate goroutines to write to graphite
+// (potentially slow) and aggregate (happening all the time).
 func (c *BufferedStats) CreateGraphiteMessage(namespace, countGaugeName string,
 	timestamp time.Time) (n int, msg []byte) {
 
@@ -170,9 +176,12 @@ func (c *BufferedStats) CreateGraphiteMessage(namespace, countGaugeName string,
 }
 
 // clearStats resets the state of all the stat types.
-// - Counters and sets are deleted, but their names are recorded if persistStats = true.
-// - Timers are always cleared because there aren't great semantics for persisting them.
-// - Gauges are preserved as-is unless persistStats = false so they keep their current values.
+// - Counters and sets are deleted, but their names are recorded if
+//   persistStats = true.
+// - Timers are always cleared because there aren't great semantics for
+//   persisting them.
+// - Gauges are preserved as-is unless persistStats = false so they keep their
+//   current values.
 func (c *BufferedStats) Clear(persistStats bool) {
 	if persistStats {
 		for k := range c.Counts {

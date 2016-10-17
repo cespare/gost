@@ -16,8 +16,9 @@ var (
 )
 
 type OSData struct {
-	// NOTE(caleb): Many of the stats (acquired from the proc filesystem) are global counters, and to get
-	// meaningful data out of them, you have to observe the value and then look at the delta later. These
+	// NOTE(caleb): Many of the stats (acquired from the proc filesystem)
+	// are global counters, and to get meaningful data out of them, you have
+	// to observe the value and then look at the delta later. These
 	// variables store the previously observed counter values.
 	cpuStats        counterStats
 	diskDeviceStats map[partition]counterStats
@@ -38,8 +39,8 @@ type counterStats []uint64
 type partition [2]int
 
 // Sub subtracts two counterStats, assuming they are the same length.
-// TODO(caleb): This should probably handle integer rollover. Different proc counters might have different
-// counter sizes, though.
+// TODO(caleb): This should probably handle integer rollover. Different proc
+// counters might have different counter sizes, though.
 func (s counterStats) Sub(other counterStats) counterStats {
 	d := make(counterStats, len(s))
 	for i, v := range s {
@@ -227,8 +228,9 @@ func (s *Server) reportDiskStats() error {
 				diff := newStats.Sub(oldStats)
 				s.osCounter("disk."+name+".io.reads", float64(diff[0]))
 				s.osCounter("disk."+name+".io.writes", float64(diff[2]))
-				// NOTE(caleb): As far as I can tell, a "sector" (in the context of /proc/diskstats and iostat) is 512
-				// bytes. See, for example, `man iostat`.
+				// NOTE(caleb): As far as I can tell, a "sector"
+				// (in the context of /proc/diskstats and iostat)
+				// is 512 bytes. See, for example, `man iostat`.
 				s.osCounter("disk."+name+".io.read_bytes", float64(diff[1])*512)
 				s.osCounter("disk."+name+".io.write_bytes", float64(diff[3])*512)
 			}
@@ -239,7 +241,8 @@ func (s *Server) reportDiskStats() error {
 	return nil
 }
 
-// decomposeDevNumber pulls the major and minor device numbers (last two bytes) from a single uint64.
+// decomposeDevNumber pulls the major and minor device numbers (last two bytes)
+// from a single uint64.
 func decomposeDevNumber(n uint64) partition {
 	minor := int(n & 0xff)
 	major := int((n & 0xff00) >> 8)

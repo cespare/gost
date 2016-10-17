@@ -7,8 +7,8 @@ import (
 
 const tcpDialTimeout = 10 * time.Second
 
-// A PConn is a persistent TCP connection. It opens a connection lazily when used and reopens the connection
-// on errors.
+// A PConn is a persistent TCP connection. It opens a connection lazily when
+// used and reopens the connection on errors.
 // It can also be thought of as a connection pool of size 1.
 type PConn struct {
 	c    *net.TCPConn
@@ -32,7 +32,8 @@ func (c *PConn) connect() error {
 }
 
 func (c *PConn) Write(b []byte) (int, error) {
-	// For now, just do one retry -- we could introduce more with backoff, etc later.
+	// For now, just do one retry -- we could introduce more with backoff,
+	// etc later.
 	hadConn := c.c != nil
 	if c.c == nil {
 		if err := c.connect(); err != nil {
@@ -41,7 +42,8 @@ func (c *PConn) Write(b []byte) (int, error) {
 	}
 	n, err := c.c.Write(b)
 	if err != nil {
-		// TODO: I could convert to net.Error and check Timeout() and/or Temporary() -- is that useful?
+		// TODO: I could convert to net.Error and check Timeout() and/or
+		// Temporary() -- is that useful?
 		if hadConn {
 			c.c.Close()
 			c.c = nil

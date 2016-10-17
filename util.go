@@ -11,11 +11,12 @@ func isSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\r' || c == '\n'
 }
 
-// parseKey does key sanitization (see Key Format in the readme) and stops on ':', which indicates the end of
-// the key. key is the sanitized key part (before the ':'), ok indicates whether this function successfully
-// found a ':' to split on, forward indicates whether this key is to be forwarded (forwarded keys start with
-// forwardKeyPrefix and that prefix is stripped from key), and rest is the remainder of the input after the
-// ':'.
+// parseKey does key sanitization (see Key Format in the readme) and stops on
+// ':', which indicates the end of the key. key is the sanitized key part
+// (before the ':'), ok indicates whether this function successfully found a ':'
+// to split on, forward indicates whether this key is to be forwarded (forwarded
+// keys start with forwardKeyPrefix and that prefix is stripped from key), and
+// rest is the remainder of the input after the ':'.
 func parseKey(b []byte, forwardingEnabled bool) (key string, ok bool, forward bool, rest []byte) {
 	var buf bytes.Buffer
 	forward = forwardingEnabled
@@ -28,17 +29,17 @@ func parseKey(b []byte, forwardingEnabled bool) (key string, ok bool, forward bo
 				continue
 			}
 		}
-		if c < ' ' || c > '~' { // Remove any byte that isn't a printable ascii char
+		if c < ' ' || c > '~' { // remove any byte that isn't a printable ascii char
 			continue
 		}
 		switch c {
-		case ' ': // Replace space with _
+		case ' ': // replace space with _
 			c = '_'
-		case '/': // Replace / with -
+		case '/': // replace / with -
 			c = '-'
 		case '<', '>', '*', '[', ']', '{', '}': // Remove <, >, *, [, ], {, and }
 			continue
-		case ':': // End of key
+		case ':': // end of key
 			return buf.String(), true, forward, b[i+1:]
 		}
 		buf.WriteByte(c)
@@ -48,8 +49,9 @@ func parseKey(b []byte, forwardingEnabled bool) (key string, ok bool, forward bo
 
 // TODO XXX HACK FIXME
 // parseFloat reads a float64 from b. This uses unsafe hackery courtesy of
-// https://code.google.com/p/go/issues/detail?id=2632#c16 -- if that issue gets fixed, we should switch to
-// doing that instead of using an unsafe []byte -> string conversion.
+// https://code.google.com/p/go/issues/detail?id=2632#c16 -- if that issue gets
+// fixed, we should switch to doing that instead of using an unsafe []byte ->
+// string conversion.
 func parseFloat(b []byte) (float64, error) {
 	var s string
 	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
@@ -58,7 +60,8 @@ func parseFloat(b []byte) (float64, error) {
 	return strconv.ParseFloat(s, 64)
 }
 
-// parseValue reads a float64 value off of b, expecting it to be followed by a | character.
+// parseValue reads a float64 value off of b, expecting it to be followed by a |
+// character.
 func parseValue(b []byte) (f float64, ok bool, rest []byte) {
 	endingPipe := false
 	var i int
@@ -120,8 +123,9 @@ func parseStatsdMessage(msg []byte, forwardingEnabled bool) (stat *Stat, ok bool
 	stat.Forward = forward
 	stat.Name = name
 
-	// NOTE: It looks like statsd will accept multiple values for a key at once (e.g., foo.bar:1|c:2.5|g), but
-	// this isn't actually documented and I'm not going to support it for now.
+	// NOTE: It looks like statsd will accept multiple values for a key at
+	// once (e.g., foo.bar:1|c:2.5|g), but this isn't actually documented
+	// and I'm not going to support it for now.
 	stat.Value, ok, rest = parseValue(rest)
 	if !ok {
 		return nil, false
