@@ -1,0 +1,19 @@
+{
+	"comment": "",
+	"ignore": "",
+	"package": [
+		{
+			"checksumSHA1": "LJDZYYZBQZJ56sgqaJ7kNLKeHRE=",
+			"path": "github.com/BurntSushi/toml",
+			"revision": "99064174e013895bbd9b025c31100bd1d9b590ca",
+			"revisionTime": "2016-07-17T15:07:09Z"
+		},
+		{
+			"checksumSHA1": "apwNyS0knsxJk1trsWLJos2u7ek=",
+			"path": "github.com/cespare/goproc",
+			"revision": "355679657f2ce9eb0b91d56789c762c1def7bfc1",
+			"revisionTime": "2014-01-20T18:03:57Z"
+		}
+	],
+	"rootPath": "github.com/cespare/gost"
+}

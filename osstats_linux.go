@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	proc "github.com/cespare/gost/internal/github.com/cespare/goproc"
+	proc "github.com/cespare/goproc"
 )
 
 var (

@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cespare/gost/internal/github.com/BurntSushi/toml"
+	"github.com/BurntSushi/toml"
 )
 
 type Conf struct {
