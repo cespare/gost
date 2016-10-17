@@ -107,8 +107,7 @@ Gost sends back some stats about itself to graphite as well. This includes:
   forwarded to another gost during this flush (see Counter Forwarding, below)
 
 There are some other counters for various error conditions. Most of these also
-show up in the stdout of gost if you use the `debug_logging = true` option in
-the configuration.
+show up in the stderr logs.
 
 ### OS stats
 

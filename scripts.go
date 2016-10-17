@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"io/ioutil"
+	"log"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -12,7 +13,7 @@ import (
 func (s *Server) runScript(path string) (err error) {
 	var count int64
 	defer func() {
-		s.l.Debugf("script `%s` exited; emitted %d stat(s)", path, count)
+		log.Printf("script `%s` exited; emitted %d stat(s)", path, count)
 	}()
 	cmd := exec.Command(path)
 	stdout, err := cmd.StdoutPipe()
@@ -33,7 +34,7 @@ func (s *Server) runScript(path string) (err error) {
 			return
 		}
 		if e := cmd.Wait(); e != nil && err == nil {
-			s.l.Debugf("stderr of %s: %s", path, output)
+			log.Printf("stderr of %s: %s", path, output)
 			err = e
 		}
 	}()
@@ -58,7 +59,7 @@ func (s *Server) runScripts() {
 		case <-ticker.C:
 			files, err := ioutil.ReadDir(s.conf.Scripts.Path)
 			if err != nil {
-				s.l.Debugf("failed to read scripts in %s: %s", s.conf.Scripts.Path, err)
+				log.Printf("failed to read scripts in %s: %s", s.conf.Scripts.Path, err)
 				s.metaInc("errors.run_scripts_list_dir")
 				continue
 			}
@@ -69,14 +70,14 @@ func (s *Server) runScripts() {
 				}
 				path := filepath.Join(s.conf.Scripts.Path, file.Name())
 				if _, ok := currentlyRunning[path]; ok {
-					s.l.Debugf("not running script because a previous instance is still running: %s", path)
+					log.Printf("not running script because a previous instance is still running: %s", path)
 					continue
 				}
-				s.l.Debugf("running script: %s", path)
+				log.Printf("running script: %s", path)
 				currentlyRunning[path] = struct{}{}
 				go func() {
 					if err := s.runScript(path); err != nil {
-						s.l.Debugf("error running script at %s: %s", path, err)
+						log.Printf("error running script at %s: %s", path, err)
 						s.metaInc("errors.run_script")
 					}
 					scriptMutex.Lock()

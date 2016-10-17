@@ -20,9 +20,6 @@ port = 8125
 # debugging output.
 debug_port = 8126
 
-# Print some verbose debugging information.
-debug_logging = true
-
 # This option controls whether gost clears out stats after it flushes. If true,
 # gost won't remember what stats it has seen; if false, it will set counts to 0
 # (and leave gauges at the previous value) but keep sending the zeroed-out

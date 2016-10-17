@@ -8,11 +8,8 @@ import (
 	"io"
 	"log"
 	"net"
-	"os"
 	"sync"
 	"time"
-
-	"github.com/cespare/gost/internal/llog"
 )
 
 const (
@@ -39,7 +36,6 @@ var (
 
 type Server struct {
 	conf *Conf
-	l    *llog.Logger
 	quit chan struct{} // for shutting down everything
 
 	bufPool chan []byte // pool of buffers for incoming messages
@@ -71,13 +67,10 @@ type Server struct {
 }
 
 // NewServer sets up a new server with some configuration without starting
-// goroutines or listeners. out is where logs are written.
-func NewServer(conf *Conf, out io.Writer) *Server {
-	// TODO: May want to make this configurable later.
-	logger := llog.NewLogger(log.New(out, "", log.LstdFlags), conf.DebugLogging)
+// goroutines or listeners.
+func NewServer(conf *Conf) *Server {
 	s := &Server{
 		conf:            conf,
-		l:               logger,
 		quit:            make(chan struct{}),
 		bufPool:         make(chan []byte, nUDPBufs),
 		metaStats:       make(chan *Stat),
@@ -94,7 +87,7 @@ func NewServer(conf *Conf, out io.Writer) *Server {
 		forwardingOutgoing: make(chan []byte),
 		forwarderIncoming:  make(chan *BufferedStats, incomingQueueSize),
 		forwardedStats:     NewBufferedStats(conf.FlushIntervalMS),
-		debugServer:        &dServer{l: logger},
+		debugServer:        new(dServer),
 		now:                time.Now,
 	}
 	s.InitOSData()
@@ -142,7 +135,7 @@ func (s *Server) Listen(clientConn *net.UDPConn, forwardListener, debugListener 
 			}
 			forwardListener = tcpKeepAliveListener{l.(*net.TCPListener)}
 		}
-		s.l.Println("Listening for forwarded gost messages on", forwardListener.Addr())
+		log.Println("Listening for forwarded gost messages on", forwardListener.Addr())
 		go s.aggregateForwarded()
 		go func() {
 			errorCh <- s.forwardServer(forwardListener)
@@ -164,7 +157,7 @@ func (s *Server) Listen(clientConn *net.UDPConn, forwardListener, debugListener 
 			return err
 		}
 	}
-	s.l.Println("Listening for UDP client requests on", clientConn.LocalAddr())
+	log.Println("Listening for UDP client requests on", clientConn.LocalAddr())
 	go func() {
 		errorCh <- s.clientServer(clientConn)
 	}()
@@ -225,7 +218,7 @@ func (s *Server) handleMessage(msg []byte) {
 	s.debugServer.Print("[in] ", msg)
 	stat, ok := parseStatsdMessage(msg, s.conf.forwardingEnabled)
 	if !ok {
-		s.l.Println("bad message:", string(msg))
+		log.Println("bad message:", string(msg))
 		s.metaInc("errors.bad_message")
 		return
 	}
@@ -266,7 +259,7 @@ func (s *Server) aggregateForwarded() {
 		case <-ticker:
 			n, msg := s.forwardedStats.CreateGraphiteMessage(s.conf.ForwardedNamespace,
 				"distinct_forwarded_metrics_flushed", s.now())
-			s.l.Debugf("Sending %d forwarded stat(s) to graphite.", n)
+			log.Printf("Sending %d forwarded stat(s) to graphite.", n)
 			s.outgoing <- msg
 			s.forwardedStats.Clear(!s.conf.ClearStatsBetweenFlushes)
 		case <-s.quit:
@@ -287,7 +280,7 @@ func (s *Server) handleForwarded(c net.Conn) {
 			if err == io.EOF {
 				return
 			}
-			s.l.Println("Error reading forwarded message:", err)
+			log.Println("Error reading forwarded message:", err)
 			s.metaInc("errors.forwarded_message_read")
 			return
 		}
@@ -303,7 +296,7 @@ func (s *Server) forwardServer(listener net.Listener) error {
 		if err != nil {
 			if e, ok := err.(net.Error); ok && e.Temporary() {
 				delay := 10 * time.Millisecond
-				s.l.Printf("Accept error: %v; retrying in %v", e, delay)
+				log.Printf("Accept error: %v; retrying in %v", e, delay)
 				time.Sleep(delay)
 				continue
 			}
@@ -326,13 +319,13 @@ func (s *Server) aggregateForwarding() {
 		case <-ticker:
 			n, msg, err := s.forwardingStats.CreateForwardMessage()
 			if err != nil {
-				s.l.Debugln("Error: Could not serialize forwarded message:", err)
+				log.Println("Error: Could not serialize forwarded message:", err)
 			}
 			if n > 0 {
-				s.l.Debugf("Forwarding %d stat(s).", n)
+				log.Printf("Forwarding %d stat(s).", n)
 				s.forwardingOutgoing <- msg
 			} else {
-				s.l.Debugln("No stats to forward.")
+				log.Println("No stats to forward.")
 			}
 			// Always delete forwarded stats -- they are cleared/preserved
 			// between flushes at the receiving end.
@@ -355,7 +348,7 @@ func (s *Server) flushForwarding() {
 			start := time.Now()
 			if _, err := conn.Write(msg); err != nil {
 				s.metaInc("errors.forwarding_write")
-				s.l.Printf("Warning: could not write forwarding message to %s: %s", s.conf.ForwardingAddr, err)
+				log.Printf("Warning: could not write forwarding message to %s: %s", s.conf.ForwardingAddr, err)
 			}
 			s.metaTimer("graphite_write", time.Since(start))
 		case <-s.quit:
@@ -384,7 +377,7 @@ func (s *Server) aggregate() {
 			}
 		case <-ticker:
 			n, msg := s.stats.CreateGraphiteMessage(s.conf.Namespace, "distinct_metrics_flushed", s.now())
-			s.l.Debugf("Flushing %d stat(s).", n)
+			log.Printf("Flushing %d stat(s).", n)
 			s.outgoing <- msg
 			s.stats.Clear(!s.conf.ClearStatsBetweenFlushes)
 		case <-s.quit:
@@ -404,7 +397,7 @@ func (s *Server) flush() {
 			start := time.Now()
 			if _, err := conn.Write(msg); err != nil {
 				s.metaInc("errors.graphite_write")
-				s.l.Printf("Warning: could not write message to Graphite at %s: %s", s.conf.GraphiteAddr, err)
+				log.Printf("Warning: could not write message to Graphite at %s: %s", s.conf.GraphiteAddr, err)
 			}
 			s.metaTimer("graphite_write", time.Since(start))
 		case <-s.quit:
@@ -416,7 +409,6 @@ func (s *Server) flush() {
 // dServer listens on a local tcp port and prints out debugging info to clients
 // that connect.
 type dServer struct {
-	l *llog.Logger
 	sync.Mutex
 	Clients []net.Conn
 }
@@ -426,7 +418,7 @@ type dServer struct {
 func (s *dServer) Start(port int, listener net.Listener) error {
 	if listener == nil {
 		addr := fmt.Sprintf("127.0.0.1:%d", port)
-		s.l.Println("Listening for debug TCP clients on", addr)
+		log.Println("Listening for debug TCP clients on", addr)
 		var err error
 		listener, err = net.Listen("tcp", addr)
 		if err != nil {
@@ -441,7 +433,7 @@ func (s *dServer) Start(port int, listener net.Listener) error {
 			}
 			s.Lock()
 			s.Clients = append(s.Clients, c)
-			s.l.Debugf("Debug client connected. Currently %d connected client(s).", len(s.Clients))
+			log.Printf("Debug client connected. Currently %d connected client(s).", len(s.Clients))
 			s.Unlock()
 		}
 	}()
@@ -453,7 +445,7 @@ func (s *dServer) closeClient(client net.Conn) {
 		if c == client {
 			s.Clients = append(s.Clients[:i], s.Clients[i+1:]...)
 			client.Close()
-			s.l.Debugf("Debug client disconnected. Currently %d connected client(s).", len(s.Clients))
+			log.Printf("Debug client disconnected. Currently %d connected client(s).", len(s.Clients))
 			return
 		}
 	}
@@ -518,5 +510,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Fatal(NewServer(conf, os.Stdout).Listen(nil, nil, nil))
+	log.Fatal(NewServer(conf).Listen(nil, nil, nil))
 }

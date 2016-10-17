@@ -4,12 +4,17 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func init() {
+	log.SetOutput(ioutil.Discard)
+}
 
 // NOTE: this test suite does end-to-end testing of gost. It is not unit
 // testing. The upside is that we get thorough test coverage of the system with
@@ -48,7 +53,7 @@ func NewTestServer() *TestServer {
 		Namespace:                "com.example",
 	}
 	s := &TestServer{
-		s:                            NewServer(conf, ioutil.Discard),
+		s:                            NewServer(conf),
 		wait:                         make(chan struct{}),
 		aggregateFlushChan:           make(chan time.Time),
 		aggregateForwardedFlushChan:  make(chan time.Time),

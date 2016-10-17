@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
 	"runtime"
 	"syscall"
 	"time"
@@ -272,25 +273,25 @@ func (s *Server) reportOSStats() {
 	if s.conf.OSStats.Mem != nil {
 		if err := s.reportMemStats(); err != nil {
 			s.metaInc("errors.os_stats_mem_check")
-			s.l.Debugln("mem stats check failure:", err)
+			log.Println("mem stats check failure:", err)
 		}
 	}
 	if s.conf.OSStats.CPU != nil {
 		if err := s.reportCPUStats(); err != nil {
 			s.metaInc("errors.os_stats_cpu_check")
-			s.l.Debugln("cpu stats check failure:", err)
+			log.Println("cpu stats check failure:", err)
 		}
 	}
 	if s.conf.OSStats.Net != nil {
 		if err := s.reportNetStats(); err != nil {
 			s.metaInc("errors.os_stats_net_check")
-			s.l.Debugln("net stats check failure:", err)
+			log.Println("net stats check failure:", err)
 		}
 	}
 	if s.conf.OSStats.Disk != nil {
 		if err := s.reportDiskStats(); err != nil {
 			s.metaInc("errors.os_stats_disk_check")
-			s.l.Debugln("disk stats check failure:", err)
+			log.Println("disk stats check failure:", err)
 		}
 	}
 }

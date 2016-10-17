@@ -16,7 +16,6 @@ type Conf struct {
 	ForwardedNamespace       string       `toml:"forwarded_namespace"`
 	Port                     int          `toml:"port"`
 	DebugPort                int          `toml:"debug_port"`
-	DebugLogging             bool         `toml:"debug_logging"`
 	ClearStatsBetweenFlushes bool         `toml:"clear_stats_between_flushes"`
 	FlushIntervalMS          int          `toml:"flush_interval_ms"`
 	Namespace                string       `toml:"namespace"`
