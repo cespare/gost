@@ -1,4 +1,4 @@
-// Package llog implements a simple logger on top of stdlib's log with two log levels.
+// Package llog implements a simple logger on top of stdlib's log with two levels.
 package llog
 
 import (
