@@ -349,7 +349,7 @@ func TestForwardedKeyParsing(t *testing.T) {
 
 	// Push the forwarded messages through.
 	s.aggregateForwardingFlushChan <- s.when
-	time.Sleep(time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	s.aggregateForwardedFlushChan <- s.when
 
 	msg := s.WaitForMessage()
