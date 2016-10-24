@@ -120,8 +120,8 @@ func NewTestServer() *TestServer {
 	}()
 
 	// Backfill some conf fields.
-	s.s.conf.GraphiteAddr = s.recorderAddr
-	s.s.conf.ForwardingAddr = s.forwardListener.Addr().String()
+	s.s.conf.GraphiteAddrs = []string{s.recorderAddr}
+	s.s.conf.ForwardingAddrs = []string{s.forwardListener.Addr().String()}
 
 	return s
 }

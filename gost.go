@@ -338,17 +338,27 @@ func (s *Server) aggregateForwarding() {
 
 // flushForwarding pushes forwarding messages to another gost instance.
 func (s *Server) flushForwarding() {
-	conn := DialPConn(s.conf.ForwardingAddr)
-	defer conn.Close()
+	conns := make([]*PConn, len(s.conf.ForwardingAddrs))
+	for i, addr := range s.conf.ForwardingAddrs {
+		conns[i] = DialPConn(addr)
+	}
+	defer func() {
+		for _, conn := range conns {
+			conn.Close()
+		}
+	}()
 	for {
 		select {
 		case msg := <-s.forwardingOutgoing:
 			debugMsg := fmt.Sprintf("<binary forwarding message; len = %d bytes>", len(msg))
 			s.debugServer.Print("[forward]", []byte(debugMsg))
 			start := time.Now()
-			if _, err := conn.Write(msg); err != nil {
-				s.metaInc("errors.forwarding_write")
-				log.Printf("Warning: could not write forwarding message to %s: %s", s.conf.ForwardingAddr, err)
+			for _, conn := range conns {
+				if _, err := conn.Write(msg); err != nil {
+					s.metaInc("errors.forwarding_write")
+					log.Printf("Warning: could not write forwarding message to %s: %s",
+						conn.addr, err)
+				}
 			}
 			s.metaTimer("graphite_write", time.Since(start))
 		case <-s.quit:
@@ -388,16 +398,26 @@ func (s *Server) aggregate() {
 
 // flush pushes outgoing messages to graphite.
 func (s *Server) flush() {
-	conn := DialPConn(s.conf.GraphiteAddr)
-	defer conn.Close()
+	conns := make([]*PConn, len(s.conf.GraphiteAddrs))
+	for i, addr := range s.conf.GraphiteAddrs {
+		conns[i] = DialPConn(addr)
+	}
+	defer func() {
+		for _, conn := range conns {
+			conn.Close()
+		}
+	}()
 	for {
 		select {
 		case msg := <-s.outgoing:
 			s.debugServer.Print("[out] ", msg)
 			start := time.Now()
-			if _, err := conn.Write(msg); err != nil {
-				s.metaInc("errors.graphite_write")
-				log.Printf("Warning: could not write message to Graphite at %s: %s", s.conf.GraphiteAddr, err)
+			for _, conn := range conns {
+				if _, err := conn.Write(msg); err != nil {
+					s.metaInc("errors.graphite_write")
+					log.Printf("Warning: could not write message to Graphite at %s: %s",
+						conn.addr, err)
+				}
 			}
 			s.metaTimer("graphite_write", time.Since(start))
 		case <-s.quit:

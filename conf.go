@@ -10,8 +10,8 @@ import (
 )
 
 type Conf struct {
-	GraphiteAddr             string       `toml:"graphite_addr"`
-	ForwardingAddr           string       `toml:"forwarding_addr"`
+	GraphiteAddrs            []string     `toml:"graphite_addrs"`
+	ForwardingAddrs          []string     `toml:"forwarding_addrs"`
 	ForwarderListenAddr      string       `toml:"forwarder_listen_addr"`
 	ForwardedNamespace       string       `toml:"forwarded_namespace"`
 	Port                     int          `toml:"port"`
@@ -85,7 +85,7 @@ func parseConf() (*Conf, error) {
 		return nil, fmt.Errorf("Error decoding %s: %s", *configFile, err)
 	}
 
-	for _, field := range []string{"graphite_addr", "port", "debug_port", "flush_interval_ms", "namespace"} {
+	for _, field := range []string{"graphite_addrs", "port", "debug_port", "flush_interval_ms", "namespace"} {
 		if !meta.IsDefined(field) {
 			return nil, fmt.Errorf("field %s is required", field)
 		}
@@ -94,7 +94,7 @@ func parseConf() (*Conf, error) {
 		return nil, errors.New("flush_interval_ms must be positive")
 	}
 
-	if meta.IsDefined("forwarding_addr") {
+	if meta.IsDefined("forwarding_addrs") {
 		conf.forwardingEnabled = true
 	}
 
