@@ -22,22 +22,25 @@ type OSData struct {
 	// to observe the value and then look at the delta later. These
 	// variables store the previously observed counter values.
 	cpuStats        counterStats
-	diskDeviceStats map[partition]counterStats
+	diskDeviceStats map[blockDev]counterStats
 	tcpStats        counterStats
 	udpStats        counterStats
 	netDeviceStats  map[string]counterStats
 }
 
 func (s *Server) InitOSData() {
-	s.osData.diskDeviceStats = make(map[partition]counterStats)
+	s.osData.diskDeviceStats = make(map[blockDev]counterStats)
 	s.osData.netDeviceStats = make(map[string]counterStats)
 }
 
 // Linux counter stats represented by unsigned ints/longs. These can roll over.
 type counterStats []uint64
 
-// A partition identifies a machine partition by major and minor device numbers.
-type partition [2]int
+// A blockDev is a Linux block device number.
+type blockDev struct {
+	major int
+	minor int
+}
 
 // Sub subtracts two counterStats, assuming they are the same length.
 // TODO(caleb): This should probably handle integer rollover. Different proc
@@ -207,14 +210,14 @@ func (s *Server) reportDiskStats() error {
 			if err := syscall.Stat(options.Path, statInfo); err != nil {
 				return err
 			}
-			device := decomposeDevNumber(statInfo.Dev)
+			bd := decomposeDevNumber(statInfo.Dev)
 			diskStats, err := proc.DiskStats()
 			if err != nil {
 				return err
 			}
 			var stats *proc.IOStatEntry
 			for _, entry := range diskStats {
-				if entry.Major == device[0] && entry.Minor == device[1] {
+				if entry.Major == bd.major && entry.Minor == bd.minor {
 					stats = entry
 				}
 			}
@@ -225,7 +228,7 @@ func (s *Server) reportDiskStats() error {
 				stats.ReadsCompleted, stats.SectorsRead,
 				stats.WritesCompleted, stats.SectorsWritten,
 			}
-			if oldStats, ok := s.osData.diskDeviceStats[device]; ok {
+			if oldStats, ok := s.osData.diskDeviceStats[bd]; ok {
 				diff := newStats.Sub(oldStats)
 				s.osCounter("disk."+name+".io.reads", float64(diff[0]))
 				s.osCounter("disk."+name+".io.writes", float64(diff[2]))
@@ -235,19 +238,25 @@ func (s *Server) reportDiskStats() error {
 				s.osCounter("disk."+name+".io.read_bytes", float64(diff[1])*512)
 				s.osCounter("disk."+name+".io.write_bytes", float64(diff[3])*512)
 			}
-			s.osData.diskDeviceStats[device] = newStats
+			s.osData.diskDeviceStats[bd] = newStats
 		}
 	}
 
 	return nil
 }
 
-// decomposeDevNumber pulls the major and minor device numbers (last two bytes)
-// from a single uint64.
-func decomposeDevNumber(n uint64) partition {
-	minor := int(n & 0xff)
-	major := int((n & 0xff00) >> 8)
-	return partition{major, minor}
+const (
+	majorMask uint64 = 0xfff
+	minorMask uint64 = 0xff
+)
+
+// decomposeDevNumber extracts the major and minor device numbers for a Linux
+// block device. See the major/minor macros in Linux's sysmacros.h.
+func decomposeDevNumber(dev uint64) blockDev {
+	return blockDev{
+		major: int(((dev >> 8) & minorMask) | ((dev >> 32) & ^majorMask)),
+		minor: int((dev & minorMask) | ((dev >> 12) & ^minorMask)),
+	}
 }
 
 func (s *Server) checkOSStats() {
