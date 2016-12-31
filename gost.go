@@ -152,6 +152,9 @@ func (s *Server) Listen(clientConn *net.UDPConn, forwardListener, debugListener 
 			return err
 		}
 		clientConn = l.(*net.UDPConn)
+		if err := clientConn.SetReadBuffer(5e6); err != nil {
+			return err
+		}
 	}
 	log.Println("Listening for UDP client requests on", clientConn.LocalAddr())
 	go func() {
