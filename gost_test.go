@@ -79,14 +79,11 @@ func NewTestServer() *TestServer {
 	if err != nil {
 		panic(err)
 	}
-	udp, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	l, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
 	}
-	s.udpConn, err = net.ListenUDP("udp", udp)
-	if err != nil {
-		panic(err)
-	}
+	s.udpConn = l.(*net.UDPConn)
 
 	// Start the fake Graphite recorder.
 	s.recorderListener, err = net.Listen("tcp", "127.0.0.1:0")

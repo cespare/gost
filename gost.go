@@ -147,15 +147,11 @@ func (s *Server) Listen(clientConn *net.UDPConn, forwardListener, debugListener 
 	}
 
 	if clientConn == nil {
-		udpAddr := fmt.Sprintf("localhost:%d", s.conf.Port)
-		udp, err := net.ResolveUDPAddr("udp", udpAddr)
+		l, err := net.ListenPacket("udp", fmt.Sprintf("localhost:%d", s.conf.Port))
 		if err != nil {
 			return err
 		}
-		clientConn, err = net.ListenUDP("udp", udp)
-		if err != nil {
-			return err
-		}
+		clientConn = l.(*net.UDPConn)
 	}
 	log.Println("Listening for UDP client requests on", clientConn.LocalAddr())
 	go func() {
