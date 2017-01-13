@@ -17,6 +17,7 @@ type Conf struct {
 	Port                     int          `toml:"port"`
 	DebugPort                int          `toml:"debug_port"`
 	ClearStatsBetweenFlushes bool         `toml:"clear_stats_between_flushes"`
+	ClearGauges              bool         `toml:"clear_gauges"`
 	FlushIntervalMS          int          `toml:"flush_interval_ms"`
 	Namespace                string       `toml:"namespace"`
 	OSStats                  *OSStatsConf `toml:"os_stats"`

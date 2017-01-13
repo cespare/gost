@@ -20,6 +20,11 @@ func TestBufferedStatsGauge(t *testing.T) {
 	s.SetGauge("foo", 20)
 	r := s.computeDerived()
 	approx(t, r["gauge"]["foo"], 20.0)
+	s.Clear(true, false)
+	r = s.computeDerived()
+	if _, ok := r["gauge"]["foo"]; ok {
+		t.Fatal("gauges not cleared")
+	}
 }
 
 func TestBufferedStatsSet(t *testing.T) {

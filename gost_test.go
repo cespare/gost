@@ -364,6 +364,21 @@ func TestNoForwarding(t *testing.T) {
 	})
 }
 
+func TestClearGauges(t *testing.T) {
+	s := NewTestServer()
+	s.s.conf.ClearStatsBetweenFlushes = false
+	s.s.conf.ClearStatsBetweenFlushes = true
+	s.Start()
+	defer s.Close()
+	s.SendGostMessages(t, "foo:10|g")
+	msg := s.WaitForMessage()
+	approx(t, msg.Parsed["com.example.foo.gauge"].Value, 10.0)
+	msg = s.WaitForMessage()
+	if _, ok := msg.Parsed["com.example.foo.gauge"]; ok {
+		t.Fatal("gauges not cleared")
+	}
+}
+
 func TestSampleRates(t *testing.T) {
 	s := NewStartedTestServer()
 	defer s.Close()

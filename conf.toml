@@ -26,6 +26,13 @@ debug_port = 8126
 # values.
 clear_stats_between_flushes = false
 
+# By default, gost continuously emits the last value it saw for every gauge.
+# Enabling clear_gauges will cause it to clear all gauges after each flush,
+# meaning clients should emit gauges at least once per flush interval.
+# Gauges are cleared if either clear_stats_between_flushes or clear_gauges
+# are true.
+clear_gauges = false
+
 # Interval to flush to graphite in milliseconds.
 flush_interval_ms = 2000
 

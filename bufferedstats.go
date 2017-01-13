@@ -177,12 +177,11 @@ func (c *BufferedStats) CreateGraphiteMessage(namespace, countGaugeName string,
 
 // clearStats resets the state of all the stat types.
 // - Counters and sets are deleted, but their names are recorded if
-//   persistStats = true.
+//   persistStats is true.
 // - Timers are always cleared because there aren't great semantics for
 //   persisting them.
-// - Gauges are preserved as-is unless persistStats = false so they keep their
-//   current values.
-func (c *BufferedStats) Clear(persistStats bool) {
+// - Gauges are preserved as-is unless persistStats or persistGauges are false.
+func (c *BufferedStats) Clear(persistStats bool, persistGauges bool) {
 	if persistStats {
 		for k := range c.Counts {
 			c.PersistentKeys["count"][k] = struct{}{}
@@ -191,7 +190,8 @@ func (c *BufferedStats) Clear(persistStats bool) {
 		for k := range c.Sets {
 			c.PersistentKeys["set"][k] = struct{}{}
 		}
-	} else {
+	}
+	if !persistStats || !persistGauges {
 		c.Gauges = make(map[string]float64)
 	}
 	c.Timers = make(map[string][]float64)
