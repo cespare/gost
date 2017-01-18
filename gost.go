@@ -260,7 +260,7 @@ func (s *Server) aggregateForwarded() {
 				"distinct_forwarded_metrics_flushed", s.now())
 			log.Printf("Sending %d forwarded stat(s) to graphite.", n)
 			s.outgoing <- msg
-			s.forwardedStats.Clear(!s.conf.ClearStatsBetweenFlushes, !s.conf.ClearGauges)
+			s.forwardedStats.Clear(!s.conf.ClearStatsBetweenFlushes)
 		case <-s.quit:
 			return
 		}
@@ -328,7 +328,7 @@ func (s *Server) aggregateForwarding() {
 			}
 			// Always delete forwarded stats -- they are cleared/preserved
 			// between flushes at the receiving end.
-			s.forwardingStats.Clear(false, false)
+			s.forwardingStats.Clear(false)
 		case <-s.quit:
 			return
 		}
@@ -381,6 +381,10 @@ func (s *Server) aggregate() {
 				s.stats.AddSetItem(key, stat.Value)
 			case StatGauge:
 				s.stats.SetGauge(key, stat.Value)
+				if s.conf.ClearGauges {
+					ttl := time.Duration(s.conf.FlushIntervalMS) * time.Millisecond
+					s.stats.SetGaugeExpiration(key, ttl)
+				}
 			case StatTimer:
 				s.stats.RecordTimer(key, stat.Value)
 			}
@@ -388,7 +392,7 @@ func (s *Server) aggregate() {
 			n, msg := s.stats.CreateGraphiteMessage(s.conf.Namespace, "distinct_metrics_flushed", s.now())
 			log.Printf("Flushing %d stat(s).", n)
 			s.outgoing <- msg
-			s.stats.Clear(!s.conf.ClearStatsBetweenFlushes, !s.conf.ClearGauges)
+			s.stats.Clear(!s.conf.ClearStatsBetweenFlushes)
 		case <-s.quit:
 			return
 		}

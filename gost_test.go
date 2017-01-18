@@ -367,10 +367,18 @@ func TestNoForwarding(t *testing.T) {
 func TestClearGauges(t *testing.T) {
 	s := NewTestServer()
 	s.s.conf.ClearStatsBetweenFlushes = false
-	s.s.conf.ClearStatsBetweenFlushes = true
+	s.s.conf.ClearGauges = true
 	s.Start()
 	defer s.Close()
 	s.SendGostMessages(t, "foo:10|g")
+
+	// Expired gauges are cleared after stats are aggregated, so we first
+	// sleep, then check for the existence of the expired gauge, then check
+	// again that it's been cleared.
+	// NOTE(dmac) This sleep increases the run time of the tests by a
+	// couple seconds. Reduce this if/when we add configurable gauge
+	// expirations.
+	time.Sleep(time.Duration(s.s.conf.FlushIntervalMS) * time.Millisecond)
 	msg := s.WaitForMessage()
 	approx(t, msg.Parsed["com.example.foo.gauge"].Value, 10.0)
 	msg = s.WaitForMessage()

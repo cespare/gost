@@ -19,6 +19,10 @@ type BufferedStats struct {
 	// When clear_stats_between_flushes = false, this is used to preserve
 	// {count, gauge, set} names between flushes.
 	PersistentKeys map[string]map[string]struct{}
+
+	// When clear_gauges = true, gauge keys are cleared after the
+	// expiration time is reached.
+	GaugeExpirationKeys map[string]time.Time
 }
 
 func NewBufferedStats(flushIntervalMS int) *BufferedStats {
@@ -33,11 +37,16 @@ func NewBufferedStats(flushIntervalMS int) *BufferedStats {
 			"rate":  make(map[string]struct{}),
 			"set":   make(map[string]struct{}),
 		},
+		GaugeExpirationKeys: make(map[string]time.Time),
 	}
 }
 
 func (c *BufferedStats) AddCount(key string, delta float64) { c.Counts[key] += delta }
 func (c *BufferedStats) SetGauge(key string, value float64) { c.Gauges[key] = value }
+
+func (c *BufferedStats) SetGaugeExpiration(key string, ttl time.Duration) {
+	c.GaugeExpirationKeys[key] = time.Now().Add(ttl)
+}
 
 func (c *BufferedStats) AddSetItem(key string, item float64) {
 	set, ok := c.Sets[key]
@@ -180,8 +189,9 @@ func (c *BufferedStats) CreateGraphiteMessage(namespace, countGaugeName string,
 //   persistStats is true.
 // - Timers are always cleared because there aren't great semantics for
 //   persisting them.
-// - Gauges are preserved as-is unless persistStats or persistGauges are false.
-func (c *BufferedStats) Clear(persistStats bool, persistGauges bool) {
+// - Gauges are preserved as-is unless persistStats is false.
+//   Expired gauges are always cleared.
+func (c *BufferedStats) Clear(persistStats bool) {
 	if persistStats {
 		for k := range c.Counts {
 			c.PersistentKeys["count"][k] = struct{}{}
@@ -190,9 +200,15 @@ func (c *BufferedStats) Clear(persistStats bool, persistGauges bool) {
 		for k := range c.Sets {
 			c.PersistentKeys["set"][k] = struct{}{}
 		}
-	}
-	if !persistStats || !persistGauges {
+	} else {
 		c.Gauges = make(map[string]float64)
+	}
+	now := time.Now()
+	for key, expiration := range c.GaugeExpirationKeys {
+		if now.After(expiration) {
+			delete(c.Gauges, key)
+			delete(c.GaugeExpirationKeys, key)
+		}
 	}
 	c.Timers = make(map[string][]float64)
 	c.Counts = make(map[string]float64)

@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"testing"
+	"time"
 )
 
 func TestBufferedStatsCounter(t *testing.T) {
@@ -18,9 +19,11 @@ func TestBufferedStatsGauge(t *testing.T) {
 	s := NewBufferedStats(2000)
 	s.SetGauge("foo", 10)
 	s.SetGauge("foo", 20)
+	s.SetGaugeExpiration("foo", 10*time.Millisecond)
 	r := s.computeDerived()
 	approx(t, r["gauge"]["foo"], 20.0)
-	s.Clear(true, false)
+	time.Sleep(20 * time.Millisecond)
+	s.Clear(true)
 	r = s.computeDerived()
 	if _, ok := r["gauge"]["foo"]; ok {
 		t.Fatal("gauges not cleared")
