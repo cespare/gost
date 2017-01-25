@@ -142,11 +142,16 @@ func (s *Server) reportNetStats() error {
 			if !ok {
 				return errors.New("Cannot determine UDP stats using package proc")
 			}
-			newStats := counterStats{uint64(stats["InDatagrams"]), uint64(stats["OutDatagrams"])}
+			newStats := counterStats{
+				uint64(stats["InDatagrams"]),
+				uint64(stats["OutDatagrams"]),
+				uint64(stats["InErrors"]),
+			}
 			if s.osData.udpStats != nil {
 				diff := newStats.Sub(s.osData.udpStats)
 				s.osCounter("net.udp.in_datagrams", float64(diff[0]))
 				s.osCounter("net.udp.out_datagrams", float64(diff[1]))
+				s.osCounter("net.udp.in_errors", float64(diff[2]))
 			}
 			s.osData.udpStats = newStats
 		}
