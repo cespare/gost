@@ -193,6 +193,32 @@ func (s *Server) reportNetStats() error {
 	return nil
 }
 
+// A note about disk usage calculations:
+//
+// The statfs syscall gives us 3 relevant numbers:
+//
+// - number of blocks (f_blocks)
+// - free blocks (f_bfree)
+// - blocks available to non-privileged users (f_bavail)
+//
+// Note that avail is slightly less than free. To calculate the used percentage
+// of the disk, we simply use
+//
+//   (blocks - avail) / blocks
+//
+// That is, the number of non-available blocks as a fraction of the total number
+// of blocks.
+//
+// On the other hand, df computes the used percentage as
+//
+//   (blocks - free) / (blocks - free + avail)
+//
+// The difference between these computations hinges on blocks which are
+// considered free but not available. df ignores these blocks entirely for the
+// purpose of the computation; we include them (and count them as used).
+// Both calculations seem fairly logical, and ours seems more easily explained.
+// This is why gost gives disk usage percentages that differ slightly from df.
+
 func (s *Server) reportDiskStats() error {
 	for name, options := range s.conf.OSStats.Disk {
 		if options.Usage != "" {
@@ -200,6 +226,7 @@ func (s *Server) reportDiskStats() error {
 			if err := syscall.Statfs(options.Path, statfsInfo); err != nil {
 				return err
 			}
+			// See note about these calculations, above.
 			usedBlocks := statfsInfo.Blocks - statfsInfo.Bavail // blocks used
 			var used float64
 			if options.Usage == "absolute" {
