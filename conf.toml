@@ -70,14 +70,10 @@ run_interval_ms = 10000
 # not given, the checks will be performed every flush_interval_ms.
 check_interval_ms = 30000
 
-# If os_stats.mem is set, two os_stats gauges will be reported:
-# mem.used: This is the used memory (MemTotal - MemFree - Buffers - Cached),
-#   either as an absolute number or a fraction of MemTotal, depending on whether
-#   breakdown is "absolute" or "fraction".
-# mem.cached: This is the memory used for disk cache, either as an absolute
-#   number or a fraction of MemTotal.
-[os_stats.mem]
-breakdown = "fraction" # Default is "fraction", if unspecified.
+# If mem is true, two os_stats gauges will be reported:
+# mem.used: used memory (MemTotal - MemFree - Buffers - Cached) as a fraction of MemTotal
+# mem.cached: memory used for disk cache as a fraction of MemTotal
+mem = true
 
 # The os_stats.cpu section controls which CPU stats are reported.
 [os_stats.cpu]
@@ -117,11 +113,11 @@ devices = ["eth0", "lo"]
 # monitors /mnt/data.
 [os_stats.disk.data_volume]
 path = "/mnt/data"
-# If usage is set, a gauge will report how much space is used on the disk,
-# either as an absolute amount (in bytes) or as a fraction of total:
+# If usage is true, a gauge will report how much space is used on the disk
+# as a fraction of total:
 # disk.data_volume.usage
-usage = "fraction" # or "absolute"
-# If io is set, then io stats will be reported for this device:
+usage = true
+# If io is true, then io stats will be reported for this device:
 # disk.data_volume.io.{reads,writes}: the number of disk reads and writes
 # disk.data_volume.io.{read,write}_bytes: the number of bytes read/written
 # Note that the sum of the first counter pair is what is often called disk IOPS

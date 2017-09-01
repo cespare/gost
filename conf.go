@@ -33,14 +33,10 @@ type ScriptsConf struct {
 
 type OSStatsConf struct {
 	CheckIntervalMS int                  `toml:"check_interval_ms"`
-	Mem             *MemConf             `toml:"mem"`
+	Mem             bool                 `toml:"mem"`
 	CPU             *CPUConf             `toml:"cpu"`
 	Net             *NetConf             `toml:"net"`
 	Disk            map[string]*DiskConf `toml:"disk"`
-}
-
-type MemConf struct {
-	Breakdown string `toml:"breakdown"`
 }
 
 type CPUConf struct {
@@ -56,7 +52,7 @@ type NetConf struct {
 
 type DiskConf struct {
 	Path  string `toml:"path"`
-	Usage string `toml:"usage"`
+	Usage bool   `toml:"usage"`
 	IO    bool   `toml:"io"`
 }
 
@@ -136,9 +132,6 @@ func validateOSStatsConf(osStats *OSStatsConf, meta toml.MetaData) error {
 			return errors.New("check_interval_ms must be positive")
 		}
 	}
-	if err := validateMemConf(osStats.Mem); err != nil {
-		return err
-	}
 	if err := validateCPUConf(osStats.CPU); err != nil {
 		return err
 	}
@@ -147,18 +140,6 @@ func validateOSStatsConf(osStats *OSStatsConf, meta toml.MetaData) error {
 		if err := validateDiskConf(diskConf); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func validateMemConf(memConf *MemConf) error {
-	if memConf == nil {
-		return nil
-	}
-	switch memConf.Breakdown {
-	case "", "fraction", "breakdown":
-	default:
-		return fmt.Errorf("Bad 'breakdown' value for os_stats.mem: %q", memConf.Breakdown)
 	}
 	return nil
 }
@@ -178,11 +159,6 @@ func validateCPUConf(cpuConf *CPUConf) error {
 func validateDiskConf(diskConf *DiskConf) error {
 	if diskConf.Path == "" {
 		return errors.New("Disk section without a path specified")
-	}
-	switch diskConf.Usage {
-	case "", "fraction", "absolute":
-	default:
-		return fmt.Errorf("Bad 'usage' value for os_stats.disk.<device>: %q", diskConf.Usage)
 	}
 	return nil
 }

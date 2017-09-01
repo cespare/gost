@@ -61,12 +61,8 @@ func (s *Server) reportMemStats() error {
 	total := float64(memInfo["MemTotal"])
 	cached := float64(memInfo["Cached"])
 	used := total - cached - float64(memInfo["MemFree"]+memInfo["Buffers"])
-	if s.conf.OSStats.Mem.Breakdown == "fraction" {
-		used /= total
-		cached /= total
-	}
-	s.osGauge("mem.used", used)
-	s.osGauge("mem.cached", cached)
+	s.osGauge("mem.used", used/total)
+	s.osGauge("mem.cached", cached/total)
 	return nil
 }
 
@@ -221,19 +217,14 @@ func (s *Server) reportNetStats() error {
 
 func (s *Server) reportDiskStats() error {
 	for name, options := range s.conf.OSStats.Disk {
-		if options.Usage != "" {
+		if options.Usage {
 			statfsInfo := &syscall.Statfs_t{}
 			if err := syscall.Statfs(options.Path, statfsInfo); err != nil {
 				return err
 			}
 			// See note about these calculations, above.
-			usedBlocks := statfsInfo.Blocks - statfsInfo.Bavail // blocks used
-			var used float64
-			if options.Usage == "absolute" {
-				used = float64(usedBlocks * uint64(statfsInfo.Bsize)) // number of bytes used
-			} else {
-				used = float64(usedBlocks) / float64(statfsInfo.Blocks) // fraction of space used
-			}
+			usedBlocks := statfsInfo.Blocks - statfsInfo.Bavail
+			used := float64(usedBlocks) / float64(statfsInfo.Blocks)
 			s.osGauge("disk."+name+".usage", used)
 		}
 
@@ -311,7 +302,7 @@ func (s *Server) reportOSStats() {
 		// Use a counter here instead of the full expense of a timer.
 		s.metaCount("os_stats_check_duration_ms", elapsed.Seconds()*1000)
 	}()
-	if s.conf.OSStats.Mem != nil {
+	if s.conf.OSStats.Mem {
 		if err := s.reportMemStats(); err != nil {
 			s.metaInc("errors.os_stats_mem_check")
 			log.Println("mem stats check failure:", err)
