@@ -45,9 +45,9 @@ type CPUConf struct {
 }
 
 type NetConf struct {
-	TCP     bool     `toml:"tcp"`
-	UDP     bool     `toml:"udp"`
-	Devices []string `toml:"devices"`
+	TCP     bool `toml:"tcp"`
+	UDP     bool `toml:"udp"`
+	Devices bool `toml:"devices"`
 }
 
 type DiskConf struct {

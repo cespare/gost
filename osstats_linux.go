@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"runtime"
 	"syscall"
 	"time"
@@ -17,6 +18,7 @@ var (
 )
 
 type OSData struct {
+	netDevices []string // e.g., ["lo", "eth0"]
 	// NOTE(caleb): Many of the stats (acquired from the proc filesystem)
 	// are global counters, and to get meaningful data out of them, you have
 	// to observe the value and then look at the delta later. These
@@ -29,6 +31,11 @@ type OSData struct {
 }
 
 func (s *Server) InitOSData() {
+	if netDevices, err := findNetDevices(); err == nil {
+		s.osData.netDevices = netDevices
+	} else {
+		log.Println("Error discovering network devices:", err)
+	}
 	s.osData.diskDeviceStats = make(map[blockDev]counterStats)
 	s.osData.netDeviceStats = make(map[string]counterStats)
 }
@@ -111,6 +118,23 @@ func (s *Server) reportCPUStats() error {
 	return nil
 }
 
+func findNetDevices() ([]string, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	var devices []string
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		if iface.Flags&net.FlagLoopback != 0 || iface.HardwareAddr != nil {
+			devices = append(devices, iface.Name)
+		}
+	}
+	return devices, nil
+}
+
 func (s *Server) reportNetStats() error {
 	if s.conf.OSStats.Net.TCP || s.conf.OSStats.Net.UDP {
 		netProtoStats, err := proc.NetProtoStats()
@@ -153,36 +177,36 @@ func (s *Server) reportNetStats() error {
 		}
 	}
 
-	if len(s.conf.OSStats.Net.Devices) > 0 {
-		receiveStats, transmitStats, err := proc.NetDevStats()
+	if s.conf.OSStats.Net.Devices {
+		rxStats, txStats, err := proc.NetDevStats()
 		if err != nil {
 			return err
 		}
-		for _, device := range s.conf.OSStats.Net.Devices {
-			deviceReceiveStats, ok := receiveStats[device]
+		for _, dev := range s.osData.netDevices {
+			rx, ok := rxStats[dev]
 			if !ok {
-				return fmt.Errorf("Cannot determine receive stats for %s", device)
+				return fmt.Errorf("Cannot determine receive stats for %s", dev)
 			}
-			deviceTransmitStats, ok := transmitStats[device]
+			tx, ok := txStats[dev]
 			if !ok {
-				return fmt.Errorf("Cannot determine transmit stats for %s", device)
+				return fmt.Errorf("Cannot determine transmit stats for %s", dev)
 			}
 			newCounters := counterStats{
-				deviceReceiveStats["bytes"], deviceTransmitStats["bytes"],
-				deviceReceiveStats["packets"], deviceTransmitStats["packets"],
-				deviceReceiveStats["errors"], deviceTransmitStats["errors"],
+				rx["bytes"], tx["bytes"],
+				rx["packets"], tx["packets"],
+				rx["errors"], tx["errors"],
 			}
-			if oldCounters, ok := s.osData.netDeviceStats[device]; ok {
+			if oldCounters, ok := s.osData.netDeviceStats[dev]; ok {
 				diff := newCounters.Sub(oldCounters)
 				for i, name := range []string{
 					"receive_bytes", "transmit_bytes",
 					"receive_packets", "transmit_packets",
 					"receive_errors", "transmit_errors",
 				} {
-					s.osCounter("net.devices."+device+"."+name, float64(diff[i]))
+					s.osCounter("net.devices."+dev+"."+name, float64(diff[i]))
 				}
 			}
-			s.osData.netDeviceStats[device] = newCounters
+			s.osData.netDeviceStats[dev] = newCounters
 		}
 	}
 

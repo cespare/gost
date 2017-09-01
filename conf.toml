@@ -93,20 +93,21 @@ load_avg = "per_cpu" # or "total"
 
 # The os_stats.net controls which network stats are reported.
 [os_stats.net]
-# If tcp is set, report TCP connection stats:
+# If tcp is true, report TCP connection stats:
 # net.tcp.{active,passive}_opens:
 #   the number of {outgoing, incoming} TCP connections established
 # net.tcp.current_connections:
 #   a gauge for the current TCP connections
 tcp = true
-# If udp is set, report UDP packet stats:
+# If udp is true, report UDP packet stats:
 # net.udp.{in,out}_datagrams: counters for incoming/outgoing UDP packets
 udp = true
-# Devices is a list of network interfaces to report per-device stats:
+# If devices is true, report stats about each network interface
+# (only lo and hardware interfaces are included):
 # net.devices.eth0.{receive,transmit}_bytes: bytes received/transmitted
 # net.devices.eth0.{receive,transmit}_packets: packets received/transmitted
 # net.devices.eth0.{receive,transmit}_errors: receive/transmit errors
-devices = ["eth0", "lo"]
+devices = true
 
 # A disk section generates stats for a particular disk device. It is identified
 # by its mount point. In this example, the disk is called 'data_volume' and it
