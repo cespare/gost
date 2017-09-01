@@ -157,16 +157,16 @@ restrictions, listed below. The maximum size of an accepted UDP packet (which
 usually contains one message but may contain several separated by `\n`) is 10Kb;
 this sets the only limit on key length.
 
-source char |             converted to              | reason
-------------|---------------------------------------|-------
-   newline  |                 error                 | newlines end gost messages
-    `:`     |                 error                 | colons end gost keys
-   space    |                  `_`                  | graphite uses space in its message format
-    `/`     |                  `-`                  | graphite can't handle `/` (keys are filenames)
-  `<`, `>`  |                removed                | graphite doesn't handle `<` (`>` excluded for symmetry)
-    `*`     |                removed                | graphite uses `*` as a wildcard
-  `[`, `]`  |                removed                | graphite uses `[...]` for char set matching
-  `{`, `}`, |                removed                | graphite uses `{...}` for matching multiple items
+| source char |  converted to  | reason                                                  |
+| ----------- | -------------- | ------------------------------------------------------- |
+|    newline  |      error     | newlines end gost messages                              |
+|     `:`     |      error     | colons end gost keys                                    |
+|    space    |       `_`      | graphite uses space in its message format               |
+|     `/`     |       `-`      | graphite can't handle `/` (keys are filenames)          |
+|   `<`, `>`  |     removed    | graphite doesn't handle `<` (`>` excluded for symmetry) |
+|     `*`     |     removed    | graphite uses `*` as a wildcard                         |
+|   `[`, `]`  |     removed    | graphite uses `[...]` for char set matching             |
+|   `{`, `}`, |     removed    | graphite uses `{...}` for matching multiple items       |
 
 Additionally, note that a trailing `.` on a key will be ignored by Graphite, so
 `foo.` is the same as `foo`.
