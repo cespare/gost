@@ -40,8 +40,8 @@ type OSStatsConf struct {
 }
 
 type CPUConf struct {
-	Stat    bool   `toml:"stat"`
-	LoadAvg string `toml:"load_avg"`
+	Stat    bool `toml:"stat"`
+	LoadAvg bool `toml:"load_avg"`
 }
 
 type NetConf struct {
@@ -132,26 +132,10 @@ func validateOSStatsConf(osStats *OSStatsConf, meta toml.MetaData) error {
 			return errors.New("check_interval_ms must be positive")
 		}
 	}
-	if err := validateCPUConf(osStats.CPU); err != nil {
-		return err
-	}
-	// For now, any parseable NetConf is valid.
 	for _, diskConf := range osStats.Disk {
 		if err := validateDiskConf(diskConf); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func validateCPUConf(cpuConf *CPUConf) error {
-	if cpuConf == nil {
-		return nil
-	}
-	switch cpuConf.LoadAvg {
-	case "", "total", "per_cpu":
-	default:
-		return fmt.Errorf("Bad 'load_avg' value for os_stats.cpu: %q", cpuConf.LoadAvg)
 	}
 	return nil
 }

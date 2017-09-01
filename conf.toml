@@ -82,14 +82,10 @@ mem = true
 # all cpu counters including idle time):
 # cpu.{user,nice,system,iowait}
 stat = true
-# If load_avg is set, then the 1/5/15-minute CPU load averages are reported. The
-# valid values for load_avg are "total", which causes the numbers to be reported
-# directly:
-# cpu.load_avg_{1,5,15}
-# and "per_cpu", which causes the numbers to be divided by the number of logical
-# CPUs to normalize them:
+# If load_avg is set, then the 1/5/15-minute CPU load averages are reported.
+# The values are divided by the number of logical CPUs to normalize them:
 # cpu.load_avg_per_cpu_{1,5,15}
-load_avg = "per_cpu" # or "total"
+load_avg = true
 
 # The os_stats.net controls which network stats are reported.
 [os_stats.net]

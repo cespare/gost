@@ -98,20 +98,13 @@ func (s *Server) reportCPUStats() error {
 	}
 
 	// Next, load averages.
-	if format := s.conf.OSStats.CPU.LoadAvg; format != "" {
+	if s.conf.OSStats.CPU.LoadAvg {
 		loadAverages, err := proc.LoadAverages()
 		if err != nil {
 			return err
 		}
-		switch format {
-		case "total":
-			for i, avg := range loadAverages {
-				s.osGauge(fmt.Sprintf("cpu.load_avg_%d", loadAvgTypes[i]), avg)
-			}
-		case "per_cpu":
-			for i, avg := range loadAverages {
-				s.osGauge(fmt.Sprintf("cpu.load_avg_per_cpu_%d", loadAvgTypes[i]), avg/nCPU)
-			}
+		for i, avg := range loadAverages {
+			s.osGauge(fmt.Sprintf("cpu.load_avg_per_cpu_%d", loadAvgTypes[i]), avg/nCPU)
 		}
 	}
 
