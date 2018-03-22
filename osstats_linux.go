@@ -294,7 +294,7 @@ const (
 // block device. See the major/minor macros in Linux's sysmacros.h.
 func decomposeDevNumber(dev uint64) blockDev {
 	return blockDev{
-		major: int(((dev >> 8) & minorMask) | ((dev >> 32) & ^majorMask)),
+		major: int(((dev >> 8) & majorMask) | ((dev >> 32) & ^majorMask)),
 		minor: int((dev & minorMask) | ((dev >> 12) & ^minorMask)),
 	}
 }
