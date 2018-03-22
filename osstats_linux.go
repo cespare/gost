@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -14,8 +13,18 @@ import (
 
 var (
 	loadAvgTypes = []int{1, 5, 15}
-	nCPU         = float64(runtime.NumCPU())
+	nCPU float64
 )
+
+// init obtains nCPU using `proc.Stat()`, because `runtime.NumCPU()` doesn't
+// account for isolcpus.
+func init() {
+	stat, err := proc.Stat()
+	if err != nil {
+		log.Fatal("Cannot obtain CPU stats: ", err)
+	}
+	nCPU = float64(len(stat.Cpus))
+}
 
 type OSData struct {
 	netDevices []string // e.g., ["lo", "eth0"]
