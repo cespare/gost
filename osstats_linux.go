@@ -43,12 +43,6 @@ func (s *Server) InitOSData() {
 // Linux counter stats represented by unsigned ints/longs. These can roll over.
 type counterStats []uint64
 
-// A blockDev is a Linux block device number.
-type blockDev struct {
-	major int
-	minor int
-}
-
 // Sub subtracts two counterStats, assuming they are the same length.
 // TODO(caleb): This should probably handle integer rollover. Different proc
 // counters might have different counter sizes, though.
@@ -283,20 +277,6 @@ func (s *Server) reportDiskStats() error {
 	}
 
 	return nil
-}
-
-const (
-	majorMask uint64 = 0xfff
-	minorMask uint64 = 0xff
-)
-
-// decomposeDevNumber extracts the major and minor device numbers for a Linux
-// block device. See the major/minor macros in Linux's sysmacros.h.
-func decomposeDevNumber(dev uint64) blockDev {
-	return blockDev{
-		major: int(((dev >> 8) & majorMask) | ((dev >> 32) & ^majorMask)),
-		minor: int((dev & minorMask) | ((dev >> 12) & ^minorMask)),
-	}
 }
 
 func (s *Server) checkOSStats() {
