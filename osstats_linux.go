@@ -13,15 +13,16 @@ import (
 
 var (
 	loadAvgTypes = []int{1, 5, 15}
-	nCPU float64
+	nCPU         float64
 )
 
-// init obtains nCPU using `proc.Stat()`, because `runtime.NumCPU()` doesn't
-// account for isolcpus.
 func init() {
+	// Use proc to determine the number of CPUs.
+	// This may be different from what runtime.NumCPU gives because
+	// the gost process may have a restricted affinity mask.
 	stat, err := proc.Stat()
 	if err != nil {
-		log.Fatal("Cannot obtain CPU stats: ", err)
+		log.Fatalln("Cannot obtain CPU stats:", err)
 	}
 	nCPU = float64(len(stat.Cpus))
 }
