@@ -7,11 +7,11 @@ daemon.
 
 Install from source:
 
-    $ go get github.com/cespare/gost
+    go install github.com/cespare/gost@latest
 
 Run `gost` with a conf file.
 
-    $ gost -conf /my/config.toml
+    gost -conf my/config.toml
 
 By default it uses `conf.toml`. This repo includes a [`conf.toml`](conf.toml)
 that should get you started. It has a lot of comments that explain what all the
