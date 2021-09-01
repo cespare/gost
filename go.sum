@@ -1,4 +1,8 @@
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
+github.com/BurntSushi/toml v0.4.1 h1:GaI7EiDXDRfa8VshkTj7Fym7ha+y8/XxIgD2okUIjLw=
+github.com/BurntSushi/toml v0.4.1/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
 github.com/cespare/goproc v0.0.1 h1:N/PSRITV6UlSwKsi2piDdkMASfcATyjq/vBTYM1H8LQ=
 github.com/cespare/goproc v0.0.1/go.mod h1:jo8ebHn8Rrttq5bxR3M3YQDm/sqmt8YzS3GKS4w8GNY=
+github.com/cespare/goproc v0.1.0 h1:L0Ic3AX1pgvNRb+pgy7ASN7vd9ccysTNBe/W09XJPPk=
+github.com/cespare/goproc v0.1.0/go.mod h1:jo8ebHn8Rrttq5bxR3M3YQDm/sqmt8YzS3GKS4w8GNY=
